@@ -369,25 +369,17 @@ tfoot td{font-weight:700;border-bottom:0}
 
 <script>
 /* =========================================================
-   Cap Réseau — version Google
-   - Connexion avec un compte Google (OAuth, sans serveur).
-   - Candidats, agents, chiffres : enregistrés dans le Google Drive
-     de l'utilisatrice (dossier caché réservé à l'application) + copie locale.
-   - Rendez-vous : lus et écrits directement dans Google Agenda.
+   Cap Réseau
+   - Connexion par e-mail et mot de passe (Supabase, offre gratuite).
+   - Toutes les données (candidats, agents, chiffres, rendez-vous) sont
+     enregistrées en ligne pour ce compte, avec une copie sur l'appareil.
    ========================================================= */
 
-/* >>> À RENSEIGNER : identifiant client OAuth créé dans Google Cloud (voir GUIDE.md) <<< */
-const CLIENT_ID = '743011226417-evr2edkf9l0kuhmuevg8p57s6ha4cu3a.apps.googleusercontent.com';
-
-const SCOPES = [
-  'openid', 'email', 'profile',
-  'https://www.googleapis.com/auth/drive.appdata',
-  'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/calendar.events'
-].join(' ');
-const KEY = 'capreseau_v1', TOK_KEY = 'capreseau_tok', USER_KEY = 'capreseau_user', GC_KEY = 'capreseau_g', CID_KEY = 'capreseau_cid', DIRTY_KEY = 'capreseau_dirty';
-const DRIVE_FILE = 'capreseau.json';
-const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris';
+/* Base de données Supabase (offre gratuite). La clé publique est faite pour être visible :
+   chaque compte ne peut lire et modifier que ses propres données (règles RLS côté base). */
+const SB_URL = 'https://zltcbgsqxbppugveqcoq.supabase.co';
+const SB_KEY = 'sb_publishable_0JxqbNwm6TBFHFK9L9eILA_yFJTY8WM';
+const KEY = 'capreseau_v1', SES_KEY = 'capreseau_session', DIRTY_KEY = 'capreseau_dirty', OWNER_KEY = 'capreseau_owner';
 const REDIRECT = location.origin + location.pathname;
 
 /* ---------- Petits outils ---------- */
@@ -443,7 +435,6 @@ const IC = {
   out: '<path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/>'
 };
 const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
-const GLOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
 
 /* ---------- Référentiels ---------- */
 const ETAPES = [
@@ -469,177 +460,110 @@ const METRIQUES = {
 const DDA_HEURES = 15;
 
 /* ---------- État ---------- */
-function blank() { return { v: 2, updatedAt: 0, settings: { prenom: '', secteur: '', objNomination: 3 }, candidats: [], agents: [], taches: [], gcal: { vis: {}, write: '' } }; }
-function normalize(s) { const b = blank(); for (const k of Object.keys(b)) if (s[k] == null) s[k] = b[k]; s.gcal.vis = s.gcal.vis || {}; delete s.demo; delete s.events; delete s.cals; return s; }
+function blank() { return { v: 3, updatedAt: 0, settings: { prenom: '', secteur: '', objNomination: 3 }, candidats: [], agents: [], taches: [], events: [] }; }
+function normalize(s) { const b = blank(); for (const k of Object.keys(b)) if (s[k] == null) s[k] = b[k]; delete s.gcal; delete s.demo; delete s.cals; return s; }
 function load() { try { const r = ls.get(KEY); return r ? normalize(JSON.parse(r)) : null; } catch (e) { return null; } }
 let S = load() || blank();
-const G = { cals: [], events: [], span: null, user: null, needAuth: false, offline: !navigator.onLine, pushing: false, loading: false, authMsg: '', savedAt: null, driveId: ls.get('capreseau_drive_id') || null };
-try { const g = JSON.parse(ls.get(GC_KEY) || 'null'); if (g) { G.cals = g.cals || []; G.events = g.events || []; G.span = g.span || null; } } catch (e) { }
-try { G.user = JSON.parse(ls.get(USER_KEY) || 'null'); } catch (e) { }
+const G = { user: null, needAuth: false, offline: !navigator.onLine, pushing: false, authMsg: '', authOk: false, gateMode: 'login', lastEmail: '', savedAt: null };
+
 const UI = { view: ss.get('cr_view') || 'jour', q: '', heat: 0, showAb: false, weekStart: weekStart(today()), annee: new Date().getFullYear(), metric: 'e', agentTab: 'fiche' };
 
-/* ---------- Connexion Google (OAuth « implicite », tout se passe dans le navigateur) ---------- */
-const CID = () => CLIENT_ID || ls.get(CID_KEY) || '';
-function getTok() { try { const t = JSON.parse(ls.get(TOK_KEY) || 'null'); if (t && t.exp > Date.now() + 30000) return t.at; } catch (e) { } return null; }
-function tokLeft() { try { const t = JSON.parse(ls.get(TOK_KEY) || 'null'); return t ? t.exp - Date.now() : 0; } catch (e) { return 0; } }
-function signIn(silent) {
-  const p = new URLSearchParams({ client_id: CID(), redirect_uri: REDIRECT, response_type: 'token', scope: SCOPES, include_granted_scopes: 'true', state: 'cr' + uid() });
-  if (silent) { p.set('prompt', 'none'); ss.set('cr_silent', '1'); } else ss.del('cr_silent');
-  if (G.user?.email) p.set('login_hint', G.user.email);
-  ss.set('cr_view', UI.view);
-  location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + p.toString());
+/* ---------- Comptes (e-mail + mot de passe) ---------- */
+const CLOUD = () => !!SB_KEY;
+let SES = null; try { SES = JSON.parse(ls.get(SES_KEY) || 'null'); } catch (e) { }
+if (SES) G.user = { email: SES.email };
+function jwt(at) { try { return JSON.parse(decodeURIComponent(escape(atob(at.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))))); } catch (e) { return {}; } }
+function setSession(d) {
+  const p = jwt(d.access_token);
+  SES = { at: d.access_token, rt: d.refresh_token, exp: Date.now() + (d.expires_in || 3600) * 1000, email: d.user?.email || p.email || SES?.email, uid: d.user?.id || p.sub || SES?.uid };
+  ls.set(SES_KEY, JSON.stringify(SES)); G.user = { email: SES.email }; G.needAuth = false;
 }
-/* Lit le jeton (ou l'erreur) que Google renvoie dans l'adresse après la connexion */
-function handleHash() {
-  if (!location.hash || location.hash.length < 2) return;
-  const h = new URLSearchParams(location.hash.slice(1));
-  if (h.get('access_token')) { ls.set(TOK_KEY, JSON.stringify({ at: h.get('access_token'), exp: Date.now() + (+h.get('expires_in') || 3600) * 1000 })); G.needAuth = false; }
-  else if (h.get('error')) { const e = h.get('error'); G.authMsg = e === 'access_denied' ? 'Accès refusé. Il faut accepter l\'accès à Drive et à l\'agenda pour utiliser l\'outil.' : (ss.get('cr_silent') ? '' : 'Connexion impossible (' + e + ').'); ls.del(TOK_KEY); }
-  else return;
-  ss.del('cr_silent');
-  history.replaceState(null, '', location.pathname + location.search);
-}
-function signOut() { ls.del(TOK_KEY); ls.del(USER_KEY); ls.del(KEY); ls.del(GC_KEY); ls.del(DIRTY_KEY); ls.del('capreseau_drive_id'); location.reload(); }
-function needAuth() { if (G.needAuth) return; G.needAuth = true; renderSync(); if (!$('#app').hidden && !$('#view').querySelector('.banner.auth')) render(); }
-
-/* Appel aux API Google avec le jeton de connexion */
-async function gfetch(url, opts = {}) {
-  const at = getTok(); if (!at) { needAuth(); throw new Error('noauth'); }
+async function sbAuth(path, body, at, method = 'POST') {
   let r;
-  try { r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + at } }); }
+  try { r = await fetch(SB_URL + '/auth/v1/' + path, { method, headers: { apikey: SB_KEY, 'Content-Type': 'application/json', ...(at ? { Authorization: 'Bearer ' + at } : {}) }, body: JSON.stringify(body || {}) }); }
+  catch (e) { throw new Error('offline'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error_code || j.code || j.error || 'http' + r.status); e.msg = j.msg || j.message || j.error_description || ''; throw e; }
+  return j;
+}
+let refreshing = null;
+async function token() {
+  if (!SES) { needAuth(); throw new Error('noauth'); }
+  if (SES.exp > Date.now() + 60000) return SES.at;
+  if (!refreshing) refreshing = sbAuth('token?grant_type=refresh_token', { refresh_token: SES.rt }).then(setSession).finally(() => { refreshing = null; });
+  try { await refreshing; } catch (e) { if (e.message === 'offline') { G.offline = true; renderSync(); } else needAuth(); throw e; }
+  return SES.at;
+}
+async function sbFetch(path, opts = {}) {
+  const at = await token();
+  let r;
+  try { r = await fetch(SB_URL + '/rest/v1/' + path, { ...opts, headers: { apikey: SB_KEY, Authorization: 'Bearer ' + at, 'Content-Type': 'application/json', ...(opts.headers || {}) } }); }
   catch (e) { G.offline = true; renderSync(); throw new Error('offline'); }
   if (G.offline) { G.offline = false; renderSync(); }
   if (r.status === 401) { needAuth(); throw new Error('401'); }
-  if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error(r.status + ' ' + t.slice(0, 300)); }
-  if (r.status === 204) return null;
-  const ct = r.headers.get('content-type') || ''; return ct.includes('json') ? r.json() : r.text();
+  if (!r.ok) throw new Error(r.status + ' ' + (await r.text().catch(() => '')).slice(0, 200));
+  const t = await r.text(); return t ? JSON.parse(t) : null;
 }
-async function loadUser() {
-  const u = await gfetch('https://www.googleapis.com/oauth2/v3/userinfo');
-  G.user = { email: u.email, nom: u.name || u.email, photo: u.picture || '' }; ls.set(USER_KEY, JSON.stringify(G.user));
-  if (!S.settings.prenom && u.given_name) { S.settings.prenom = u.given_name; }
-}
+function needAuth() { if (G.needAuth) return; G.needAuth = true; renderSync(); if (!$('#app').hidden) render(); }
+function signOut() { if (SES) sbAuth('logout', {}, SES.at).catch(() => { }); for (const k of [SES_KEY, KEY, DIRTY_KEY, OWNER_KEY]) ls.del(k); location.replace(REDIRECT); }
 
-/* ---------- Enregistrement : copie locale + Google Drive (dossier caché de l'application) ---------- */
+/* ---------- Enregistrement : copie sur l'appareil + base en ligne ---------- */
 let pushTimer = null;
 function save() {
   S.updatedAt = Date.now(); ls.set(KEY, JSON.stringify(S)); ls.set(DIRTY_KEY, '1');
-  clearTimeout(pushTimer); pushTimer = setTimeout(() => drivePush(), 1500); renderSync();
+  clearTimeout(pushTimer); pushTimer = setTimeout(() => cloudPush(), 1200); renderSync();
 }
 const isDirty = () => ls.get(DIRTY_KEY) === '1';
-async function driveFind() {
-  const r = await gfetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,modifiedTime)&q=' + encodeURIComponent(`name='${DRIVE_FILE}'`));
-  return (r.files || [])[0] || null;
-}
-async function drivePush(keepalive) {
-  if (!CID()) return;
-  if (!getTok()) { needAuth(); return; }
-  if (G.pushing) return;
+async function cloudPush(keepalive) {
+  if (!CLOUD() || !SES || G.needAuth) return;
+  if (G.pushing) { clearTimeout(pushTimer); pushTimer = setTimeout(() => cloudPush(), 1500); return; }
   G.pushing = true; renderSync();
-  try {
-    const body = JSON.stringify(S);
-    if (!G.driveId) { const f = await driveFind(); if (f) { G.driveId = f.id; ls.set('capreseau_drive_id', f.id); } }
-    if (G.driveId) {
-      await gfetch(`https://www.googleapis.com/upload/drive/v3/files/${G.driveId}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body, keepalive: !!keepalive && body.length < 60000 });
-    } else {
-      const b = 'capreseau' + uid();
-      const mp = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: DRIVE_FILE, parents: ['appDataFolder'] })}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${b}--`;
-      const r = await gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${b}` }, body: mp });
-      G.driveId = r.id; ls.set('capreseau_drive_id', r.id);
-    }
-    ls.del(DIRTY_KEY); G.savedAt = Date.now();
-  } catch (e) { /* reste marqué « à enregistrer », on réessaiera */ }
-  G.pushing = false; renderSync();
+  const stamp = S.updatedAt, body = JSON.stringify({ user_id: SES.uid, data: S, updated_at: new Date().toISOString() });
+  let ok = false;
+  try { await sbFetch('cap_reseau?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body, keepalive: !!keepalive && body.length < 60000 }); ok = true; } catch (e) { }
+  G.pushing = false;
+  if (ok) { G.savedAt = Date.now(); if (S.updatedAt === stamp) ls.del(DIRTY_KEY); }
+  if (isDirty() && !G.needAuth) { clearTimeout(pushTimer); pushTimer = setTimeout(() => cloudPush(), ok ? 800 : 15000); }
+  renderSync();
 }
-/* Au démarrage : on prend la version la plus récente entre Drive et la copie locale */
-async function driveLoad() {
-  const f = await driveFind();
-  if (!f) { if (S.candidats.length || S.agents.length || S.taches.length) await drivePush(); else { ls.del(DIRTY_KEY); G.savedAt = Date.now(); } return; }
-  G.driveId = f.id; ls.set('capreseau_drive_id', f.id);
-  const remote = await gfetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
-  const rem = (remote && typeof remote === 'object') ? normalize(remote) : null;
-  if (rem && ((rem.updatedAt || 0) >= (S.updatedAt || 0) || !isDirty())) {
-    const prenom = S.settings.prenom; S = rem; if (!S.settings.prenom) S.settings.prenom = prenom;
-    ls.set(KEY, JSON.stringify(S)); ls.del(DIRTY_KEY); G.savedAt = Date.now();
-  } else await drivePush();
+/* Au démarrage et au retour sur l'appli : on garde la version la plus récente */
+async function cloudLoad() {
+  const rows = await sbFetch('cap_reseau?select=data&user_id=eq.' + SES.uid);
+  const rem = rows && rows[0] && rows[0].data ? normalize(rows[0].data) : null;
+  if (!rem) { if (S.candidats.length || S.agents.length || S.taches.length || S.events.length) { ls.set(DIRTY_KEY, '1'); await cloudPush(); } else G.savedAt = Date.now(); return false; }
+  if (!isDirty() || (rem.updatedAt || 0) >= (S.updatedAt || 0)) {
+    const changed = (rem.updatedAt || 0) !== (S.updatedAt || 0);
+    S = rem; ls.set(KEY, JSON.stringify(S)); ls.del(DIRTY_KEY); G.savedAt = Date.now(); return changed;
+  }
+  await cloudPush(); return false;
 }
 function renderSync() {
-  let cls = 'good', txt = G.savedAt ? 'Enregistré à ' + fmtTime(G.savedAt) : 'Enregistré sur Google Drive';
-  if (!CID()) { cls = ''; txt = 'Enregistré sur cet appareil'; }
-  else if (G.needAuth) { cls = 'bad'; txt = 'Reconnexion Google nécessaire'; }
+  let cls = 'good', txt = G.savedAt ? 'Enregistré à ' + fmtTime(G.savedAt) : 'Enregistré en ligne';
+  if (!CLOUD()) { cls = ''; txt = 'Enregistré sur cet appareil'; }
+  else if (G.needAuth) { cls = 'bad'; txt = 'Reconnexion nécessaire'; }
   else if (G.offline) { cls = 'warn'; txt = isDirty() ? 'Hors ligne · à enregistrer' : 'Hors ligne · copie locale'; }
   else if (G.pushing) { cls = 'busy'; txt = 'Enregistrement…'; }
   else if (isDirty()) { cls = 'warn'; txt = 'Modifications à enregistrer'; }
   for (const el of $$('.sync')) { el.className = 'sync ' + cls; el.querySelector('span:last-child').textContent = txt; el.title = txt; }
 }
 
-/* ---------- Google Agenda ---------- */
-function cacheG() { ls.set(GC_KEY, JSON.stringify({ cals: G.cals, events: G.events, span: G.span })); }
-const calVisible = c => S.gcal.vis[c.id] != null ? !!S.gcal.vis[c.id] : c.selected;
-const writeCal = () => G.cals.find(c => c.id === S.gcal.write && c.canEdit) || G.cals.find(c => c.primary) || G.cals.find(c => c.canEdit);
-async function loadCalendars() {
-  const r = await gfetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader');
-  G.cals = (r.items || []).map(c => ({ id: c.id, nom: c.summaryOverride || c.summary || c.id, couleur: c.backgroundColor || '#0A6B66', primary: !!c.primary, selected: c.selected !== false, canEdit: c.accessRole === 'owner' || c.accessRole === 'writer' }))
-    .sort((a, b) => (b.primary - a.primary) || a.nom.localeCompare(b.nom));
-  cacheG();
-}
-function gToEv(it, cal) {
-  const allDay = !!it.start?.date;
-  const sdt = it.start?.dateTime || '', edt = it.end?.dateTime || '';
-  const xp = it.extendedProperties?.private || {};
-  const lp = (xp.crLien || '').split(':');
-  return { id: it.id, calId: cal.id, couleur: cal.couleur, calNom: cal.nom, canEdit: cal.canEdit, titre: it.summary || '(sans titre)',
-    date: allDay ? it.start.date : sdt.slice(0, 10), dateFin: allDay ? (it.end?.date || '') : '', allDay,
-    debut: allDay ? '' : sdt.slice(11, 16), fin: allDay ? '' : edt.slice(11, 16), lieu: it.location || '', type: xp.crType || '',
-    lien: lp[1] ? { t: lp[0], id: lp[1] } : null, link: it.htmlLink || '' };
-}
-/* Charge les rendez-vous de tous les agendas sur une plage de dates [min, max[ */
-async function loadEvents(min, max) {
-  if (!G.cals.length) return;
-  G.loading = true;
-  const q = c => new URLSearchParams({ timeMin: parseD(min).toISOString(), timeMax: parseD(max).toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250', timeZone: TZ }).toString();
-  const res = await Promise.all(G.cals.map(c => gfetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(c.id)}/events?${q(c)}`).then(r => [c, r]).catch(() => null)));
-  for (const x of res) { if (!x) continue; const [c, r] = x;
-    G.events = G.events.filter(e => !(e.calId === c.id && e.date >= min && e.date < max));
-    for (const it of (r.items || [])) if (it.status !== 'cancelled' && it.start) G.events.push(gToEv(it, c)); }
-  G.events = G.events.filter(e => G.cals.some(c => c.id === e.calId));
-  const sp = G.span;
-  G.span = sp && sp.min <= max && sp.max >= min ? { min: sp.min < min ? sp.min : min, max: sp.max > max ? sp.max : max } : { min, max };
-  G.loading = false; cacheG();
-}
-/* Charge la plage seulement si elle n'est pas déjà connue ; renvoie vrai si quelque chose a été chargé */
-async function ensureRange(min, max) {
-  if (!getTok() || G.needAuth || !G.cals.length) return false;
-  if (G.span && G.span.min <= min && G.span.max >= max) return false;
-  try { await loadEvents(min, max); return true; } catch (e) { return false; }
-}
-function allEvents() {
-  const out = [];
-  for (const e of G.events) {
-    const cal = G.cals.find(c => c.id === e.calId); if (cal && !calVisible(cal)) continue;
-    if (e.allDay && e.dateFin && e.dateFin > addDays(e.date, 1)) { for (let d = e.date; d < e.dateFin; d = addDays(d, 1)) out.push({ ...e, date: d }); }
-    else out.push(e);
-  }
-  return out.sort((a, b) => (a.date + (a.debut || '00:00')).localeCompare(b.date + (b.debut || '00:00')));
-}
-const evLies = (t, id) => G.events.filter(e => e.lien?.t === t && e.lien.id === id).sort((a, b) => (a.date + a.debut).localeCompare(b.date + b.debut));
-async function gSaveEvent(data, id, calId) {
-  const allDay = !data.debut;
-  let fin = data.fin; if (!allDay && (!fin || fin <= data.debut)) { const [h, m] = data.debut.split(':').map(Number); fin = `${pad(Math.min(23, h + 1))}:${pad(m)}`; }
-  const body = { summary: data.titre, location: data.lieu || '',
-    start: allDay ? { date: data.date } : { dateTime: `${data.date}T${data.debut}:00`, timeZone: TZ },
-    end: allDay ? { date: addDays(data.date, 1) } : { dateTime: `${data.date}T${fin}:00`, timeZone: TZ },
-    extendedProperties: { private: { crApp: '1', crType: data.type || '', crLien: data.lien ? `${data.lien.t}:${data.lien.id}` : '' } } };
-  const base = 'https://www.googleapis.com/calendar/v3/calendars/';
-  const cal = id ? G.cals.find(c => c.id === calId) : writeCal();
-  if (!cal) throw new Error('Aucun agenda Google modifiable');
-  const r = id ? await gfetch(`${base}${encodeURIComponent(cal.id)}/events/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-             : await gfetch(`${base}${encodeURIComponent(cal.id)}/events`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const ev = gToEv(r, cal); G.events = G.events.filter(e => e.id !== ev.id); G.events.push(ev); cacheG(); return ev;
-}
-async function gDeleteEvent(id, calId) {
-  await gfetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
-  G.events = G.events.filter(e => e.id !== id); cacheG();
+/* ---------- Agenda de l'outil ---------- */
+const TYPE_COUL = { entretien: '#0A6B66', visite: '#4F5BD5', accompagnement: '#C2410C', reunion: '#0E7490', admin: '#64748B', autre: '#A21CAF' };
+const deco = e => ({ ...e, calId: 'app', couleur: TYPE_COUL[e.type] || TYPE_COUL.autre, calNom: TYPES_EV[e.type] || 'Rendez-vous' });
+const allEvents = () => S.events.map(deco).sort((a, b) => (a.date + (a.debut || '00:00')).localeCompare(b.date + (b.debut || '00:00')));
+const evLies = (t, id) => allEvents().filter(e => e.lien?.t === t && e.lien.id === id);
+/* Fichier .ics : « Ajouter à mon agenda » sur le téléphone ou l'ordinateur */
+function downloadIcs(e) {
+  const x = s => String(s || '').replace(/\\/g, '\\\\').replace(/([,;])/g, '\\$1').replace(/\n/g, '\\n');
+  const d = e.date.replace(/-/g, ''), hh = s => s.replace(':', '') + '00';
+  let fin = e.fin; if (e.debut && (!fin || fin <= e.debut)) { const [h, m] = e.debut.split(':').map(Number); fin = `${pad(Math.min(23, h + 1))}:${pad(m)}`; }
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Cap Reseau//FR', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT', `UID:${e.id}@cap-reseau`,
+    'DTSTAMP:' + new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z',
+    e.debut ? `DTSTART:${d}T${hh(e.debut)}` : `DTSTART;VALUE=DATE:${d}`,
+    e.debut ? `DTEND:${d}T${hh(fin)}` : `DTEND;VALUE=DATE:${addDays(e.date, 1).replace(/-/g, '')}`,
+    'SUMMARY:' + x(e.titre), e.lieu ? 'LOCATION:' + x(e.lieu) : '', 'END:VEVENT', 'END:VCALENDAR'].filter(Boolean);
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([L.join('\r\n')], { type: 'text/calendar' }));
+  a.download = (e.titre || 'rendez-vous').replace(/[^\w\- ]+/g, '').trim().slice(0, 40) + '.ics'; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 
 /* ---------- Calculs ---------- */
@@ -704,8 +628,8 @@ function render() {
   renderSync();
 }
 function bandeau() {
-  if (CID() && G.needAuth) return `<div class="banner bad auth">${ic('info')}<div class="grow"><b>Connexion Google expirée.</b> Les modifications restent sur cet appareil et seront enregistrées dès la reconnexion.</div><button class="btn sm primary" data-a="signin">Se reconnecter</button></div>`;
-  if (!CID()) return `<div class="banner">${ic('info')}<div class="grow"><b>Mode local.</b> Google n'est pas encore configuré : les données restent dans ce navigateur.</div></div>`;
+  if (CLOUD() && G.needAuth) return `<div class="banner bad auth">${ic('info')}<div class="grow"><b>Session expirée.</b> Les modifications restent sur cet appareil et seront enregistrées après la reconnexion.</div><button class="btn sm primary" data-a="signin">Se reconnecter</button></div>`;
+  if (!CLOUD()) return `<div class="banner">${ic('info')}<div class="grow"><b>Mode local.</b> La base en ligne n'est pas encore configurée : les données restent dans ce navigateur.</div></div>`;
   return '';
 }
 function demarrage() {
@@ -713,27 +637,66 @@ function demarrage() {
   return `<section class="panel"><div class="panel-h"><h2>Pour bien démarrer</h2></div><div class="list">
     <div class="row"><span class="chip accent">1</span><div class="grow"><div class="t">Vérifier le profil</div><div class="s">Prénom, secteur et objectif de nominations de l'année.</div></div><button class="btn sm" data-a="go" data-v="reglages">Réglages</button></div>
     <div class="row"><span class="chip accent">2</span><div class="grow"><div class="t">Ajouter un premier candidat</div><div class="s">Un futur agent repéré sur LinkedIn, par cooptation ou en salon.</div></div><button class="btn sm primary" data-a="new-c">Ajouter</button></div>
-    <div class="row"><span class="chip accent">3</span><div class="grow"><div class="t">Planifier un rendez-vous</div><div class="s">Il s'ajoute directement dans Google Agenda.</div></div><button class="btn sm" data-a="new-ev">Rendez-vous</button></div>
+    <div class="row"><span class="chip accent">3</span><div class="grow"><div class="t">Planifier un rendez-vous</div><div class="s">Il apparaît dans l'agenda de l'outil et peut être ajouté à celui du téléphone.</div></div><button class="btn sm" data-a="new-ev">Rendez-vous</button></div>
   </div></section>`;
 }
-function ensureView() {
-  const ws = UI.view === 'agenda' ? UI.weekStart : weekStart(today());
-  ensureRange(addDays(ws, -7), addDays(ws, 21)).then(ch => { if (ch && !drawerCtx && (UI.view === 'agenda' || UI.view === 'jour')) render(); });
-}
+function ensureView() { }
 const BRAND_SVG = '<svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V7z"/><path d="M9 12.5l2 2 4-4.5"/></svg>';
-function showGate() {
+function showGate(mode) {
+  mode = mode || G.gateMode; G.gateMode = mode;
   $('#app').hidden = true; $('#gate').hidden = false;
-  $('#gate').innerHTML = `<div class="gate-card">
+  const T = { login: ['Connexion', 'Se connecter', 'Recrutement des futurs agents, suivi du réseau et agenda, au même endroit.'],
+    signup: ['Créer mon compte', 'Créer le compte', 'Un compte suffit pour retrouver ses données sur le téléphone et l\'ordinateur.'] }[mode];
+  $('#gate').innerHTML = `<form class="gate-card" id="f-auth" novalidate>
     <div class="brand"><div class="brand-mark" aria-hidden="true">${BRAND_SVG}</div><div><b>Cap Réseau</b><small>Pilotage d'inspection</small></div></div>
-    <div><h1>Bienvenue</h1><p class="muted" style="margin-top:6px">Recrutement des futurs agents, suivi du réseau et agenda, au même endroit.</p></div>
-    <ul><li>Les données sont enregistrées dans votre Google Drive, dans un dossier privé réservé à l'application.</li>
-      <li>Les rendez-vous sont lus et ajoutés dans Google Agenda.</li>
-      <li>Une copie reste sur l'appareil pour fonctionner sans réseau.</li></ul>
-    ${G.authMsg ? `<div class="banner bad">${esc(G.authMsg)}</div>` : ''}
-    <button class="gbtn" data-a="signin">${GLOGO}Se connecter avec Google</button>
-    <p class="faint" style="font-size:.82rem">Google peut afficher « Google n'a pas validé cette application » : c'est normal pour un outil privé. Choisir « Paramètres avancés », puis « Accéder à Cap Réseau ».</p></div>`;
+    <div><h1>${T[0]}</h1><p class="muted" style="margin-top:6px">${T[2]}</p></div>
+    ${G.authMsg ? `<div class="banner ${G.authOk ? '' : 'bad'}">${esc(G.authMsg)}</div>` : ''}
+    <label class="field"><span>E-mail</span><input id="a-email" type="email" autocomplete="username" inputmode="email" required value="${esc(G.lastEmail || SES?.email || '')}"></label>
+    <label class="field"><span>Mot de passe</span><input id="a-pass" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required></label>
+    ${mode === 'signup' ? '<p class="faint" style="font-size:.84rem;margin-top:-8px">8 caractères minimum.</p>' : ''}
+    <button class="btn primary" type="submit" id="a-go" style="justify-content:center;padding:11px;font-size:1rem">${T[1]}</button>
+    ${mode === 'login' ? `<button type="button" class="btn ghost sm" data-a="gate" data-v="signup" style="align-self:center">Première fois ? Créer un compte</button>
+      <p class="faint" style="font-size:.82rem;text-align:center">Mot de passe oublié : demander à Charles de le réinitialiser.</p>`
+      : `<button type="button" class="btn ghost sm" data-a="gate" data-v="login" style="align-self:center">J'ai déjà un compte</button>`}
+  </form>`;
+  setTimeout(() => $(G.lastEmail || SES?.email ? '#a-pass' : '#a-email')?.focus(), 50);
 }
 function showApp() { $('#gate').hidden = true; $('#app').hidden = false; render(); }
+function authError(e) {
+  const c = e.message;
+  if (c === 'offline') return 'Impossible de joindre le serveur. Vérifier la connexion internet (un réseau d\'entreprise peut aussi bloquer l\'accès).';
+  if (c === 'invalid_credentials' || c === 'invalid_grant') return 'E-mail ou mot de passe incorrect.';
+  if (c === 'email_not_confirmed') return 'Adresse pas encore confirmée.';
+  if (c === 'user_already_exists' || c === 'email_exists') return 'Un compte existe déjà avec cette adresse : se connecter.';
+  if (c === 'weak_password') return 'Mot de passe trop simple : en choisir un plus long.';
+  if (c === 'signup_disabled') return 'La création de comptes est fermée. Se connecter avec le compte existant.';
+  if (c === 'email_address_invalid' || c === 'validation_failed') return 'Adresse e-mail non valide.';
+  if (/rate_limit/.test(c)) return 'Trop de tentatives. Réessayer dans quelques minutes.';
+  return 'Erreur : ' + (e.msg || c);
+}
+async function authSubmit() {
+  const mode = G.gateMode, email = $('#a-email').value.trim().toLowerCase(), pass = $('#a-pass').value, btn = $('#a-go');
+  G.lastEmail = email;
+  const fail = m => { G.authMsg = m; G.authOk = false; showGate(mode); };
+  if (!/^\S+@\S+\.\S+$/.test(email)) return fail('Adresse e-mail non valide.');
+  if (!pass) return fail('Mot de passe manquant.');
+  if (mode === 'signup' && pass.length < 8) return fail('Le mot de passe doit faire au moins 8 caractères.');
+  btn.disabled = true; btn.textContent = 'Un instant…';
+  try {
+    const d = mode === 'login' ? await sbAuth('token?grant_type=password', { email, password: pass }) : await sbAuth('signup', { email, password: pass });
+    if (!d.access_token) { G.authMsg = 'Compte créé. Il reste à confirmer l\'adresse avec le lien reçu par e-mail, puis à se connecter.'; G.authOk = true; return showGate('login'); }
+    setSession(d); G.authMsg = ''; await startSession();
+    if (mode === 'signup') toast('Compte créé, bienvenue !');
+  } catch (err) { fail(authError(err)); }
+}
+async function startSession() {
+  const owner = ls.get(OWNER_KEY);
+  if (owner && owner !== SES.uid) { S = blank(); ls.del(KEY); ls.del(DIRTY_KEY); }
+  ls.set(OWNER_KEY, SES.uid);
+  showApp();
+  try { await cloudLoad(); } catch (e) { }
+  if (!drawerCtx) render(); else renderSync();
+}
 
 /* ---------- Vue : Aujourd'hui ---------- */
 function vueJour() {
@@ -901,33 +864,27 @@ function vueAgenda() {
   const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
   const d0 = parseD(ws), d6 = parseD(days[6]);
   const lbl = d0.getMonth() === d6.getMonth() ? `${d0.getDate()} – ${d6.getDate()} ${MOIS_L[d6.getMonth()].toLowerCase()} ${d6.getFullYear()}` : `${d0.getDate()} ${MOIS[d0.getMonth()]} – ${d6.getDate()} ${MOIS[d6.getMonth()]} ${d6.getFullYear()}`;
-  const sub = !CID() ? 'Google n\'est pas encore configuré : l\'agenda s\'affichera après la mise en ligne.' : G.cals.length ? 'Google Agenda. Les rendez-vous créés ici y sont ajoutés directement.' : 'Chargement de Google Agenda…';
   return `
-  <div class="head"><div><h1>Agenda</h1><p class="sub">${sub}</p></div>
-    <div class="head-actions">${CID() ? `<button class="iconbtn" data-a="refresh" aria-label="Actualiser l'agenda" title="Actualiser">${ic('refresh')}</button>` : ''}<button class="btn primary" data-a="new-ev">${ic('plus')}Rendez-vous</button></div></div>
+  <div class="head"><div><h1>Agenda</h1><p class="sub">Entretiens, visites et réunions. Chaque rendez-vous peut être ajouté à l'agenda du téléphone.</p></div>
+    <div class="head-actions"><button class="btn primary" data-a="new-ev">${ic('plus')}Rendez-vous</button></div></div>
   <div class="toolbar" style="justify-content:space-between">
     <div class="toolbar"><button class="iconbtn" data-a="week" data-v="-7" aria-label="Semaine précédente">${ic('left')}</button><b class="num" style="min-width:12ch">${lbl}</b><button class="iconbtn" data-a="week" data-v="7" aria-label="Semaine suivante">${ic('right')}</button>
       <button class="btn sm" data-a="week" data-v="0">Cette semaine</button></div>
-    <div class="cal-legend">${G.cals.map(c => `<button class="cal-tog" data-a="cal-vis" data-id="${esc(c.id)}" aria-pressed="${calVisible(c)}"><span class="dot" style="background:${esc(c.couleur)}"></span><span>${esc(c.nom)}</span></button>`).join('')}</div>
+    <div class="cal-legend">${Object.entries(TYPES_EV).map(([k, v]) => `<span class="chip"><span class="dot" style="background:${TYPE_COUL[k]}"></span>${v}</span>`).join('')}</div>
   </div>
   <div class="week">${days.map(d => { const list = evs.filter(e => e.date === d);
     return `<section class="day ${d === t ? 'today' : ''}"><div class="day-h"><b>${parseD(d).getDate()}</b><span>${fmtD(d, { weekday: 'long' })}</span></div>
-      <div class="day-b">${list.map(e => `<button class="ev" data-a="open-ev" data-id="${esc(e.id)}" data-cal="${esc(e.calId)}"><span class="et"><span class="dot" style="background:${esc(e.couleur)}"></span>${e.debut ? e.debut + (e.fin ? '–' + e.fin : '') : 'Journée'}</span><span class="en">${esc(e.titre)}</span></button>`).join('')}</div>
+      <div class="day-b">${list.map(e => `<button class="ev" data-a="open-ev" data-id="${e.id}" data-cal="app"><span class="et"><span class="dot" style="background:${e.couleur}"></span>${e.debut ? e.debut + (e.fin ? '–' + e.fin : '') : 'Journée'}</span><span class="en">${esc(e.titre)}</span></button>`).join('')}</div>
       <button class="add-day" data-a="new-ev" data-date="${d}">+ Ajouter</button></section>`; }).join('')}</div>`;
 }
 
 /* ---------- Vue : Réglages ---------- */
 function vueReglages() {
-  const st = S.settings, wc = writeCal();
-  const compte = !CID() ? `<p class="muted">Google n'est pas encore configuré. Les données restent dans ce navigateur.</p>`
-    : `${G.user ? `<div class="acct"><span class="avatar">${G.user.photo ? `<img src="${esc(G.user.photo)}" alt="" referrerpolicy="no-referrer">` : esc((G.user.nom || '?')[0])}</span><div class="grow"><b>${esc(G.user.nom)}</b><div class="muted" style="font-size:.88rem">${esc(G.user.email)}</div></div></div>` : ''}
-      <p class="muted" style="font-size:.9rem">Les données sont enregistrées dans le Google Drive de ce compte, dans un dossier caché réservé à Cap Réseau. Il n'apparaît pas dans Drive et ne pèse que quelques kilo-octets.</p>
-      <div class="head-actions">${G.needAuth || !getTok() ? `<button class="btn primary" data-a="signin">Se reconnecter</button>` : `<button class="btn" data-a="sync-now">${ic('refresh')}Enregistrer maintenant</button>`}<button class="btn danger" data-a="arm" data-then="signout">${ic('out')}Se déconnecter</button></div>
-      <p class="faint" style="font-size:.84rem">La déconnexion efface la copie sur cet appareil. Les données restent dans Google Drive.</p>`;
-  const agendas = !G.cals.length ? `<p class="muted" style="font-size:.92rem">${CID() ? 'Les agendas apparaîtront après la connexion à Google.' : 'Disponible après la mise en ligne.'}</p>`
-    : `<label class="field"><span>Agenda où ajouter les nouveaux rendez-vous</span><select id="set-write">${G.cals.filter(c => c.canEdit).map(c => `<option value="${esc(c.id)}" ${wc && wc.id === c.id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select></label>
-      <div class="list">${G.cals.map(c => `<div class="row"><span class="dot" style="background:${esc(c.couleur)};width:12px;height:12px"></span><div class="grow"><div class="t">${esc(c.nom)}</div><div class="s">${c.primary ? 'Agenda principal' : c.canEdit ? 'Modifiable' : 'Lecture seule'}</div></div>
-        <button class="switch" role="switch" aria-checked="${calVisible(c)}" aria-label="Afficher ${esc(c.nom)}" data-a="cal-vis" data-id="${esc(c.id)}"></button></div>`).join('')}</div>`;
+  const st = S.settings;
+  const compte = !CLOUD() ? `<p class="muted">La base en ligne n'est pas encore configurée. Les données restent dans ce navigateur.</p>`
+    : `<div class="acct"><span class="avatar">${esc(((SES?.email || '?')[0] || '?').toUpperCase())}</span><div class="grow"><b>${esc(SES?.email || '')}</b><div class="muted" style="font-size:.88rem">Données enregistrées en ligne, visibles uniquement avec ce compte.</div></div></div>
+      <div class="head-actions">${G.needAuth ? `<button class="btn primary" data-a="signin">Se reconnecter</button>` : `<button class="btn" data-a="sync-now">${ic('refresh')}Enregistrer maintenant</button>`}<button class="btn" data-a="pwd">Changer le mot de passe</button><button class="btn danger" data-a="arm" data-then="signout">${ic('out')}Se déconnecter</button></div>
+      <p class="faint" style="font-size:.84rem">La déconnexion efface la copie sur cet appareil. Les données restent en ligne.</p>`;
   return `<div class="head"><div><h1>Réglages</h1></div></div>
   <div class="grid2"><div class="col">
     <section class="panel"><div class="panel-h"><h2>Profil</h2></div>
@@ -937,18 +894,18 @@ function vueReglages() {
         <label class="field"><span>Objectif de nominations sur l'année</span><input id="p-obj" name="objNomination" type="number" min="0" value="${esc(st.objNomination)}"></label>
         <div class="field" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div>
       </form></section>
-    <section class="panel"><div class="panel-h"><h2>Google Agenda</h2></div>${agendas}</section>
+    <section class="panel"><div class="panel-h"><h2>Compte</h2></div><div class="box" style="border:0;padding:0">${compte}</div></section>
   </div><div class="col">
-    <section class="panel"><div class="panel-h"><h2>Compte Google</h2></div><div class="box" style="border:0;padding:0">${compte}</div></section>
     <section class="panel"><div class="panel-h"><h2>Sauvegarde de secours</h2></div>
-      <p class="muted" style="font-size:.92rem;margin-bottom:12px">En plus de Google Drive, il est possible de copier toutes les données et de les coller dans une note ou un e-mail.</p>
+      <p class="muted" style="font-size:.92rem;margin-bottom:12px">En plus de l'enregistrement en ligne, il est possible de copier toutes les données et de les coller dans une note ou un e-mail.</p>
       <div class="head-actions"><button class="btn" data-a="backup">Copier la sauvegarde</button><button class="btn" data-a="restore">Restaurer…</button></div>
       <textarea id="backup-out" style="display:none;margin-top:10px;width:100%;min-height:90px;font-size:.78rem;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)" readonly aria-label="Sauvegarde"></textarea></section>
     <section class="panel"><div class="panel-h"><h2>Données</h2></div>
       <div class="head-actions"><button class="btn danger" data-a="arm" data-then="wipe">Tout effacer</button></div>
-      <p class="faint" style="font-size:.85rem;margin-top:10px">Efface candidats, agents et chiffres, ici et dans Google Drive. Les rendez-vous de Google Agenda ne sont pas touchés. Un deuxième clic confirme.</p></section>
+      <p class="faint" style="font-size:.85rem;margin-top:10px">Efface candidats, agents, chiffres et rendez-vous, ici et en ligne. Un deuxième clic confirme.</p></section>
   </div></div>`;
 }
+
 /* ---------- Panneau coulissant ---------- */
 let drawerCtx = null;
 function openDrawer(title, body, foot, ctx) {
@@ -1063,22 +1020,12 @@ function openAgent(id, tab) {
   openDrawer(isNew ? 'Nouvel agent' : fullName(a), body, foot, { type: 'a', id: a.id, noFocus: !isNew && UI.agentTab !== 'fiche' });
 }
 
-/* Rendez-vous (Google Agenda) */
+/* Rendez-vous (agenda de l'outil) */
 function openEvent(id, calId, preset = {}) {
-  if (!CID()) { toast('Disponible après la mise en ligne avec Google'); return; }
-  if (!G.cals.length) { toast(getTok() ? 'Agenda Google en cours de chargement…' : 'Se reconnecter à Google pour gérer les rendez-vous'); return; }
-  const ex = id ? G.events.find(x => x.id === id && x.calId === calId) : null;
-  if (id && !ex) return;
-  if (ex && (!ex.canEdit || (ex.allDay && ex.dateFin > addDays(ex.date, 1)))) {
-    openDrawer(ex.titre, `<div class="box"><span class="chip"><span class="dot" style="background:${esc(ex.couleur)}"></span>${esc(ex.calNom)}</span>
-      <p style="text-transform:capitalize"><b>${fmtLong(ex.date)}</b></p><p>${ex.debut ? ex.debut + (ex.fin ? ' – ' + ex.fin : '') : 'Toute la journée'}</p>${ex.lieu ? `<p class="muted">${esc(ex.lieu)}</p>` : ''}</div>
-      <p class="note">${ex.canEdit ? 'Événement sur plusieurs jours : il se modifie dans Google Agenda.' : 'Cet agenda est en lecture seule.'}</p>`,
-      ex.link ? `<span class="sp"></span><a class="btn" href="${esc(ex.link)}" target="_blank" rel="noopener">${ic('ext')}Ouvrir dans Google Agenda</a>` : '', { noFocus: true });
-    return;
-  }
-  const e = ex || { id: null, titre: '', date: preset.date || today(), debut: '10:00', fin: '11:00', lieu: '', type: preset.type || 'entretien', lien: preset.lien || null };
-  if (!ex && e.lien) { const p = e.lien.t === 'c' ? S.candidats.find(x => x.id === e.lien.id) : S.agents.find(x => x.id === e.lien.id); if (p) { e.titre = (e.lien.t === 'c' ? 'Entretien — ' : 'Visite agence — ') + fullName(p); e.lieu = p.ville || ''; if (e.lien.t === 'a') e.type = 'visite'; } }
-  const lienV = e.lien ? `${e.lien.t}:${e.lien.id}` : '', wc = writeCal();
+  const e = id ? S.events.find(x => x.id === id) : { id: null, titre: '', date: preset.date || today(), debut: '10:00', fin: '11:00', lieu: '', type: preset.type || 'entretien', lien: preset.lien || null };
+  if (!e) return;
+  if (!id && e.lien) { const p = e.lien.t === 'c' ? S.candidats.find(x => x.id === e.lien.id) : S.agents.find(x => x.id === e.lien.id); if (p) { e.titre = (e.lien.t === 'c' ? 'Entretien — ' : 'Visite agence — ') + fullName(p); e.lieu = p.ville || ''; if (e.lien.t === 'a') e.type = 'visite'; } }
+  const lienV = e.lien ? `${e.lien.t}:${e.lien.id}` : '';
   const body = `<form class="form" id="f-ev">
     ${fld('Titre', inp('e-titre', e.titre, 'text', 'required placeholder="Ex. Entretien — Julien Morvan"'), true)}
     ${fld('Date', inp('e-date', e.date, 'date'))}${fld('Type', `<select id="e-type">${Object.entries(TYPES_EV).map(([k, v]) => `<option value="${k}" ${k === (e.type || 'autre') ? 'selected' : ''}>${v}</option>`).join('')}</select>`)}
@@ -1087,13 +1034,15 @@ function openEvent(id, calId, preset = {}) {
     ${fld('Lié à', `<select id="e-lien"><option value="">Personne</option>
       <optgroup label="Candidats">${S.candidats.filter(c => c.etape !== 'abandon').map(c => `<option value="c:${c.id}" ${lienV === 'c:' + c.id ? 'selected' : ''}>${esc(fullName(c))}</option>`).join('')}</optgroup>
       <optgroup label="Agents">${S.agents.map(a => `<option value="a:${a.id}" ${lienV === 'a:' + a.id ? 'selected' : ''}>${esc(fullName(a))}</option>`).join('')}</optgroup></select>`, true)}
-    ${ex ? `<div class="field full"><span>Agenda</span><span class="chip" style="align-self:flex-start"><span class="dot" style="background:${esc(ex.couleur)}"></span>${esc(ex.calNom)}</span></div>`
-      : fld('Ajouter dans l\'agenda', `<select id="e-cal">${G.cals.filter(c => c.canEdit).map(c => `<option value="${esc(c.id)}" ${wc && wc.id === c.id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select>`, true)}
   </form>
   <p class="faint" style="font-size:.84rem">Laisser l'heure de début vide pour un événement sur toute la journée.</p>`;
-  const foot = `${ex ? `<button class="btn danger" data-a="arm" data-then="del-ev" data-id="${esc(ex.id)}" data-cal="${esc(ex.calId)}">Supprimer</button>` : ''}<span class="sp"></span>
-    ${ex?.link ? `<a class="btn ghost" href="${esc(ex.link)}" target="_blank" rel="noopener" aria-label="Ouvrir dans Google Agenda">${ic('ext')}</a>` : ''}<button class="btn primary" data-a="save-ev">Enregistrer</button>`;
-  openDrawer(ex ? 'Rendez-vous' : 'Nouveau rendez-vous', body, foot, { type: 'ev', id: ex?.id || null, calId: ex?.calId || null });
+  const foot = `${e.id ? `<button class="btn danger" data-a="arm" data-then="del-ev" data-id="${e.id}">Supprimer</button>` : ''}<span class="sp"></span>
+    ${e.id ? `<button class="btn" data-a="ics" data-id="${e.id}">${ic('agenda')}Ajouter à mon agenda</button>` : ''}<button class="btn primary" data-a="save-ev" data-id="${e.id || ''}">Enregistrer</button>`;
+  openDrawer(e.id ? 'Rendez-vous' : 'Nouveau rendez-vous', body, foot, { type: 'ev' });
+}
+function openPwd() {
+  openDrawer('Changer le mot de passe', `<form class="form" id="f-pwd">${fld('Nouveau mot de passe', '<input id="n-pass" type="password" autocomplete="new-password" minlength="8" required>', true)}</form><p class="faint" style="font-size:.84rem">8 caractères minimum.</p>`,
+    `<span class="sp"></span><button class="btn primary" data-a="save-pwd">Enregistrer</button>`, { type: 'pwd' });
 }
 /* Tâche */
 function openTache() {
@@ -1116,16 +1065,14 @@ const A = {
   'open-ev': el => openEvent(el.dataset.id, el.dataset.cal),
   'new-t': () => openTache(),
   'pick-heat': el => { drawerCtx.heat = +el.dataset.v; $$('#c-heat button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === el.dataset.v)); },
-  signin: () => signIn(false),
-  'sync-now': () => { if (!getTok()) { needAuth(); return; } drivePush(); },
-  refresh: async el => { if (!getTok()) { needAuth(); return; } el.disabled = true;
-    try { await loadCalendars(); G.span = null; await ensureRange(addDays(UI.weekStart, -7), addDays(UI.weekStart, 21)); toast('Agenda à jour'); } catch (e) { toast('Actualisation impossible'); }
-    render(); },
-  heat: el => { UI.heat = +el.dataset.v; $$('.toolbar .seg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.v === UI.heat)); renderBoard(); },
-  'toggle-ab': () => { UI.showAb = !UI.showAb; render(); },
-  metric: el => { UI.metric = el.dataset.v; render(); },
-  week: el => { const n = +el.dataset.v; UI.weekStart = n === 0 ? weekStart(today()) : addDays(UI.weekStart, n); render(); },
-  'cal-vis': el => { const c = G.cals.find(x => x.id === el.dataset.id); if (!c) return; S.gcal.vis[c.id] = !calVisible(c); save(); render(); },
+  signin: () => { G.lastEmail = SES?.email || G.lastEmail; G.authMsg = ''; showGate('login'); },
+  gate: el => { G.authMsg = ''; showGate(el.dataset.v); },
+  'sync-now': () => { if (!isDirty()) ls.set(DIRTY_KEY, '1'); cloudPush(); },
+  pwd: () => openPwd(),
+  'save-pwd': async el => { const p = $('#n-pass').value; if (p.length < 8) { $('#n-pass').focus(); toast('8 caractères minimum'); return; }
+    el.disabled = true; try { await sbAuth('user', { password: p }, await token(), 'PUT'); closeDrawer(); toast('Mot de passe modifié'); } catch (e) { el.disabled = false; toast(authError(e)); } },
+  ics: el => { const e = S.events.find(x => x.id === el.dataset.id); if (e) downloadIcs(e); },
+
   atab: el => { UI.agentTab = el.dataset.v; openAgent(el.dataset.id); },
 
   'save-c': el => {
@@ -1165,16 +1112,14 @@ const A = {
     a.formations = a.formations || []; a.formations.push({ id: uid(), date: $('#f-date').value || today(), intitule: $('#f-int').value.trim() || 'Formation', heures: h }); save(); openAgent(a.id); render(); toast('Formation ajoutée'); },
   'del-form': el => { const a = S.agents.find(x => x.id === el.dataset.id); a.formations = a.formations.filter(f => f.id !== el.dataset.f); save(); openAgent(a.id); render(); },
 
-  'save-ev': async el => {
+  'save-ev': el => {
     const ti = $('#e-titre').value.trim(); if (!ti) { $('#e-titre').focus(); toast('Le titre est nécessaire'); return; }
-    const l = $('#e-lien').value.split(':'), ctx = drawerCtx;
-    const data = { titre: ti, date: $('#e-date').value || today(), debut: $('#e-debut').value, fin: $('#e-fin').value, lieu: $('#e-lieu').value.trim(), type: $('#e-type').value, lien: l[1] ? { t: l[0], id: l[1] } : null };
-    if ($('#e-cal') && $('#e-cal').value !== S.gcal.write) { S.gcal.write = $('#e-cal').value; save(); }
-    el.disabled = true; el.textContent = 'Envoi à Google…';
-    try { await gSaveEvent(data, ctx.id, ctx.calId); closeDrawer(); render(); toast(ctx.id ? 'Rendez-vous modifié dans Google Agenda' : 'Rendez-vous ajouté dans Google Agenda'); }
-    catch (err) { el.disabled = false; el.textContent = 'Enregistrer';
-      toast(err.message === 'offline' ? 'Pas de réseau : rendez-vous non enregistré' : (err.message === 'noauth' || err.message === '401') ? 'Reconnexion Google nécessaire' : 'Google a refusé l\'enregistrement'); }
+    let e = el.dataset.id ? S.events.find(x => x.id === el.dataset.id) : null; const isNew = !e; if (isNew) { e = { id: uid() }; S.events.push(e); }
+    const l = $('#e-lien').value.split(':');
+    Object.assign(e, { titre: ti, date: $('#e-date').value || today(), debut: $('#e-debut').value, fin: $('#e-fin').value, lieu: $('#e-lieu').value.trim(), type: $('#e-type').value, lien: l[1] ? { t: l[0], id: l[1] } : null });
+    save(); closeDrawer(); render(); toast(isNew ? 'Rendez-vous ajouté' : 'Rendez-vous modifié');
   },
+
   backup: async () => { const txt = JSON.stringify(S); const ta = $('#backup-out'); ta.style.display = 'block'; ta.value = txt;
     try { await navigator.clipboard.writeText(txt); toast('Sauvegarde copiée'); } catch (e) { ta.select(); toast('Sélectionnée : copier avec Cmd+C'); } },
   restore: () => openDrawer('Restaurer une sauvegarde', `<p class="muted">Coller ici le texte d'une sauvegarde copiée depuis Cap Réseau. Les données actuelles seront remplacées.</p>
@@ -1189,7 +1134,7 @@ const A = {
       wipe: () => { S = blank(); save(); render(); toast('Toutes les données ont été effacées'); },
       'del-c': () => { S.candidats = S.candidats.filter(c => c.id !== id); save(); closeDrawer(); render(); toast('Candidat supprimé'); },
       'del-a': () => { S.agents = S.agents.filter(a => a.id !== id); S.candidats.forEach(c => { if (c.agentId === id) delete c.agentId; }); save(); closeDrawer(); render(); toast('Agent supprimé'); },
-      'del-ev': async () => { try { await gDeleteEvent(id, el.dataset.cal); closeDrawer(); render(); toast('Rendez-vous supprimé de Google Agenda'); } catch (e) { toast('Suppression impossible pour le moment'); } },
+      'del-ev': () => { S.events = S.events.filter(e => e.id !== id); save(); closeDrawer(); render(); toast('Rendez-vous supprimé'); },
       signout: () => signOut()
     })[el.dataset.then]?.();
   }
@@ -1204,6 +1149,8 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#drawer').classList.contains('on')) closeDrawer(); });
 document.addEventListener('submit', e => {
   e.preventDefault();
+  if (e.target.id === 'f-auth') { authSubmit(); return; }
+  if (e.target.id === 'f-pwd') { $('[data-a="save-pwd"]')?.click(); return; }
   if (e.target.id === 'f-profil') { S.settings.prenom = $('#p-prenom').value.trim(); S.settings.secteur = $('#p-secteur').value.trim(); S.settings.objNomination = +$('#p-obj').value || 0; save(); render(); toast('Profil enregistré'); }
   else if (e.target.id === 'f-cand') $('[data-a="save-c"]')?.click();
   else if (e.target.id === 'f-agent') $('[data-a="save-a"]')?.click();
@@ -1214,7 +1161,6 @@ document.addEventListener('input', e => {
   if (e.target.id === 'q-cand') { UI.q = e.target.value; renderBoard(); }
 });
 document.addEventListener('change', e => {
-  if (e.target.id === 'set-write') { S.gcal.write = e.target.value; save(); toast('Agenda par défaut enregistré'); return; }
   if (e.target.id === 'sel-annee') { UI.annee = +e.target.value; render(); return; }
   const key = e.target.dataset.aMonth;
   if (key && drawerCtx?.type === 'a') {
@@ -1236,31 +1182,20 @@ document.addEventListener('drop', e => { const col = e.target.closest?.('.kcol')
 
 /* ---------- Démarrage ---------- */
 async function boot() {
-  handleHash();
-  if (!CID()) { showApp(); return; }
-  if (!getTok()) {
-    if (G.user && navigator.onLine && !ss.get('cr_silent_done')) { ss.set('cr_silent_done', '1'); signIn(true); return; }
-    if (!G.user) { showGate(); return; }
-    G.needAuth = true; showApp(); return;
-  }
-  ss.del('cr_silent_done'); G.needAuth = false;
-  showApp();
-  try {
-    await loadUser(); await driveLoad(); await loadCalendars(); G.span = null;
-    await ensureRange(addDays(weekStart(today()), -7), addDays(weekStart(today()), 21));
-  } catch (e) { }
-  if (!drawerCtx) render(); else renderSync();
+  if (!CLOUD()) { showApp(); return; }
+  if (!SES) { showGate('login'); return; }
+  await startSession();
 }
-/* Retour sur l'appli (autre appareil entre-temps) : on recharge Drive et l'agenda */
+/* Retour sur l'appli (modifiée entre-temps sur un autre appareil) : on recharge */
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') { if (isDirty() && getTok()) { clearTimeout(pushTimer); drivePush(true); } return; }
-  if (!CID() || $('#app').hidden) return;
-  if (!getTok()) { needAuth(); return; }
-  (async () => { try { if (!isDirty()) await driveLoad(); G.span = null; await ensureRange(addDays(weekStart(today()), -7), addDays(weekStart(today()), 21)); } catch (e) { } if (!drawerCtx) render(); })();
+  if (document.visibilityState === 'hidden') { if (isDirty() && SES) { clearTimeout(pushTimer); cloudPush(true); } return; }
+  if (!CLOUD() || !SES || $('#app').hidden || G.needAuth) return;
+  (async () => { let ch = false; try { if (!isDirty()) ch = await cloudLoad(); } catch (e) { } if (ch && !drawerCtx) render(); else renderSync(); })();
 });
-addEventListener('online', () => { G.offline = false; renderSync(); if (isDirty()) drivePush(); });
+addEventListener('online', () => { G.offline = false; renderSync(); if (isDirty()) cloudPush(); });
 addEventListener('offline', () => { G.offline = true; renderSync(); });
 boot();
+
 
 </script>
 </body>
