@@ -651,8 +651,8 @@ function showGate(mode) {
     <div class="brand"><div class="brand-mark" aria-hidden="true">${BRAND_SVG}</div><div><b>Cap Réseau</b><small>Pilotage d'inspection</small></div></div>
     <div><h1>${T[0]}</h1><p class="muted" style="margin-top:6px">${T[2]}</p></div>
     ${G.authMsg ? `<div class="banner ${G.authOk ? '' : 'bad'}">${esc(G.authMsg)}</div>` : ''}
-    <label class="field"><span>E-mail</span><input id="a-email" type="email" autocomplete="username" inputmode="email" required value="${esc(G.lastEmail || SES?.email || '')}"></label>
-    <label class="field"><span>Mot de passe</span><input id="a-pass" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required></label>
+    <label class="field"><span>E-mail</span><input id="a-email" name="email" type="email" autocomplete="username" inputmode="email" required value="${esc(G.lastEmail || SES?.email || '')}"></label>
+    <label class="field"><span>Mot de passe</span><input id="a-pass" name="password" type="password" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required></label>
     ${mode === 'signup' ? '<p class="faint" style="font-size:.84rem;margin-top:-8px">8 caractères minimum.</p>' : ''}
     <button class="btn primary" type="submit" id="a-go" style="justify-content:center;padding:11px;font-size:1rem">${T[1]}</button>
     ${mode === 'login' ? `<button type="button" class="btn ghost sm" data-a="gate" data-v="signup" style="align-self:center">Première fois ? Créer un compte</button>
@@ -685,7 +685,10 @@ async function authSubmit() {
   try {
     const d = mode === 'login' ? await sbAuth('token?grant_type=password', { email, password: pass }) : await sbAuth('signup', { email, password: pass });
     if (!d.access_token) { G.authMsg = 'Compte créé. Il reste à confirmer l\'adresse avec le lien reçu par e-mail, puis à se connecter.'; G.authOk = true; return showGate('login'); }
-    setSession(d); G.authMsg = ''; await startSession();
+    setSession(d); G.authMsg = '';
+    /* Propose au navigateur d'enregistrer l'identifiant et le mot de passe */
+    try { if (window.PasswordCredential) await navigator.credentials.store(new PasswordCredential({ id: email, password: pass, name: email })); } catch (e) { }
+    await startSession();
     if (mode === 'signup') toast('Compte créé, bienvenue !');
   } catch (err) { fail(authError(err)); }
 }
