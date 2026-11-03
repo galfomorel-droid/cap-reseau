@@ -440,15 +440,20 @@ const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}<
 const ETAPES = [
   { id: 'repere', nom: 'Repérés' },
   { id: 'contact', nom: 'Premier contact' },
-  { id: 'decouverte', nom: 'RDV découverte' },
-  { id: 'approfondi', nom: 'Entretiens' },
-  { id: 'dossier', nom: 'Dossier & validation' },
+  { id: 'e1', nom: '1. Premier entretien individuel', aide: 'Présenter et partager le questionnaire confidentiel. Présenter l\'ensemble du process de recrutement, pour plus de transparence (au plus tard en fin de premier entretien ou de synthèse).' },
+  { id: 'e2', nom: '2. Entretien de synthèse', aide: 'Même objectif de transparence : le process complet doit être présenté au plus tard à cette étape.' },
+  { id: 'e3', nom: '3. Questionnaire confidentiel', aide: 'Commencer la grille d\'évaluation. Présenter les grandes lignes du show de la rémunération et remettre le show pour l\'esquisse de Business Plan du 4e entretien (BP IR et BP IS, collectives incluses). Mapping réseau.' },
+  { id: 'e4', nom: '4. Mandat, rémunération et restitution BP', aide: 'Laisser le candidat présenter son esquisse de Business Plan. Il peut réfléchir à plusieurs scénarios, mais présente un seul BP, réaliste et cohérent avec le mapping réseau.' },
+  { id: 'e5', nom: '5. Entretien additionnel', aide: 'En parallèle des étapes 5 et 6 : entretien RH avec le CIR régional, Vis ma vie A2P, contrôle des expériences professionnelles auprès des précédents employeurs.' },
+  { id: 'e6', nom: '6. Entretien 6 références', aide: 'En parallèle des étapes 5 et 6 : entretien RH avec le CIR régional, Vis ma vie A2P, contrôle des expériences professionnelles auprès des précédents employeurs.' },
+  { id: 'e7', nom: '7. Bilan et décision finale', aide: 'Bilan de l\'ensemble du parcours et décision finale de recrutement.' },
   { id: 'nomme', nom: 'Nommés agents' }
 ];
+const PARALLELE = [{ id: 'rh', nom: 'Entretien RH avec le CIR régional' }, { id: 'a2p', nom: 'Vis ma vie A2P' }, { id: 'xp', nom: 'Contrôle des expériences professionnelles auprès des précédents employeurs' }];
+const ANCIENNES_ETAPES = { decouverte: 'e1', approfondi: 'e2', dossier: 'e7' };
 const ETAPE_NOM = Object.fromEntries([...ETAPES.map(e => [e.id, e.nom]), ['abandon', 'Abandon']]);
-const PROFILS = ['Conseiller patrimonial en banque', 'Conseiller clientèle banque', 'CGP indépendant', 'Agent d\'une autre compagnie', 'Courtier', 'Commercial terrain', 'Commercial en assurance', 'Reconversion', 'Autre'];
-const SOURCES = ['LinkedIn', 'Cooptation', 'Réseau perso', 'Salon / forum', 'Candidature spontanée', 'Site d\'emploi', 'Autre'];
-const PROJETS = ['Création d\'agence', 'Reprise de portefeuille', 'Association avec un agent', 'À définir'];
+const PROFILS = ['Directeur d\'agence', 'Indépendant', 'Conseiller patrimonial en banque', 'Conseiller clientèle banque', 'CGP indépendant', 'Agent d\'une autre compagnie', 'Courtier', 'Commercial terrain', 'Commercial en assurance', 'Reconversion', 'Autre'];
+const SOURCES = ['Cooptation', 'LinkedIn', 'Indeed', 'APEC', 'Réseau perso', 'Salon / forum', 'Candidature spontanée', 'Site d\'emploi', 'Autre'];
 const CHALEUR = { 1: 'Froid', 2: 'Tiède', 3: 'Chaud' };
 const TYPES_EV = { entretien: 'Entretien recrutement', visite: 'Visite d\'agence', accompagnement: 'Accompagnement client', reunion: 'Réunion', admin: 'Administratif', autre: 'Autre' };
 const TYPES_VISITE = ['Visite d\'agence', 'Accompagnement client', 'Point téléphonique', 'Réunion d\'équipe', 'Revue d\'activité'];
@@ -461,7 +466,9 @@ const DDA_HEURES = 15;
 
 /* ---------- État ---------- */
 function blank() { return { v: 3, updatedAt: 0, settings: { prenom: '', secteur: '', objNomination: 3 }, candidats: [], agents: [], taches: [], events: [] }; }
-function normalize(s) { const b = blank(); for (const k of Object.keys(b)) if (s[k] == null) s[k] = b[k]; delete s.gcal; delete s.demo; delete s.cals; return s; }
+function normalize(s) { const b = blank(); for (const k of Object.keys(b)) if (s[k] == null) s[k] = b[k]; delete s.gcal; delete s.demo; delete s.cals;
+  for (const c of s.candidats) { if (ANCIENNES_ETAPES[c.etape]) c.etape = ANCIENNES_ETAPES[c.etape]; delete c.projet; c.parallele = c.parallele || {}; }
+  return s; }
 function load() { try { const r = ls.get(KEY); return r ? normalize(JSON.parse(r)) : null; } catch (e) { return null; } }
 let S = load() || blank();
 const G = { user: null, needAuth: false, offline: !navigator.onLine, pushing: false, authMsg: '', authOk: false, gateMode: 'login', lastEmail: '', savedAt: null };
@@ -766,7 +773,7 @@ function vueRecrut() {
 }
 function renderBoard() {
   const q = UI.q.trim().toLowerCase();
-  const match = c => (!UI.heat || c.chaleur === UI.heat) && (!q || [c.prenom, c.nom, c.ville, c.profil, c.source, c.projet].join(' ').toLowerCase().includes(q));
+  const match = c => (!UI.heat || c.chaleur === UI.heat) && (!q || [c.prenom, c.nom, c.ville, c.profil, c.source].join(' ').toLowerCase().includes(q));
   const cols = [...ETAPES, ...(UI.showAb ? [{ id: 'abandon', nom: 'Abandons' }] : [])];
   $('#board').innerHTML = cols.map(e => {
     const list = S.candidats.filter(c => c.etape === e.id && match(c)).sort((a, b) => b.chaleur - a.chaleur || (a.next?.date || '9').localeCompare(b.next?.date || '9'));
@@ -779,7 +786,7 @@ function card(c) {
   return `<button class="kcard" draggable="true" data-a="open-c" data-id="${c.id}">
     <span class="n"><span class="heat h${c.chaleur}" title="${CHALEUR[c.chaleur]}"><i></i><i></i><i></i></span>${esc(fullName(c))}</span>
     <span class="p">${esc(c.profil || '')}${c.ville ? ' · ' + esc(c.ville) : ''}</span>
-    ${c.projet ? `<span class="tags"><span class="chip">${esc(c.projet)}</span></span>` : ''}${n}</button>`;
+    ${c.source ? `<span class="tags"><span class="chip">${esc(c.source)}</span></span>` : ''}${n}</button>`;
 }
 
 /* ---------- Vue : Agents ---------- */
@@ -924,8 +931,16 @@ const fld = (label, html, full) => `<label class="field ${full ? 'full' : ''}"><
 const inp = (id, v, type = 'text', extra = '') => `<input id="${id}" name="${id}" type="${type}" value="${esc(v ?? '')}" ${extra}>`;
 
 /* Candidat */
+/* Repères du process de recrutement AXA pour l'étape en cours */
+function guideEtape(c) {
+  const e = ETAPES.find(x => x.id === c.etape); if (!e?.aide) return '';
+  const par = ['e5', 'e6', 'e7'].includes(c.etape), done = c.parallele || {};
+  return `<div class="box"><div class="section-t"><h3>Étape en cours : ${esc(e.nom)}</h3></div><p class="muted" style="font-size:.92rem">${esc(e.aide)}</p>
+    ${par ? `<div class="list">${PARALLELE.map(x => `<label class="row" style="cursor:pointer"><input type="checkbox" data-par="${x.id}" ${done[x.id] ? 'checked' : ''}><span class="grow">${esc(x.nom)}</span></label>`).join('')}</div>` : ''}
+    ${c.etape === 'e7' ? '<p class="note">Décision finale de recrutement : passer le candidat en « Nommés agents » pour créer sa fiche agent.</p>' : ''}</div>`;
+}
 function openCandidat(id) {
-  const c = id ? S.candidats.find(x => x.id === id) : { id: null, prenom: '', nom: '', tel: '', email: '', ville: '', profil: PROFILS[0], source: SOURCES[0], projet: PROJETS[3], etape: 'repere', chaleur: 2, next: { texte: '', date: addDays(today(), 2) }, notes: '', journal: [] };
+  const c = id ? S.candidats.find(x => x.id === id) : { id: null, prenom: '', nom: '', tel: '', email: '', ville: '', profil: PROFILS[0], source: SOURCES[0], etape: 'repere', chaleur: 2, next: { texte: '', date: addDays(today(), 2) }, notes: '', journal: [] };
   if (!c) return;
   const evs = c.id ? evLies('c', c.id) : [];
   const idx = ETAPES.findIndex(e => e.id === c.etape);
@@ -935,14 +950,14 @@ function openCandidat(id) {
     ${fld('Prénom', inp('c-prenom', c.prenom, 'text', 'required autocomplete="off"'))}${fld('Nom', inp('c-nom', c.nom, 'text', 'autocomplete="off"'))}
     ${fld('Téléphone', inp('c-tel', c.tel, 'tel'))}${fld('E-mail', inp('c-email', c.email, 'email'))}
     ${fld('Ville', inp('c-ville', c.ville))}${fld('Profil actuel', `<select id="c-profil">${opt(PROFILS, c.profil)}</select>`)}
-    ${fld('Origine', `<select id="c-source">${opt(SOURCES, c.source)}</select>`)}${fld('Projet', `<select id="c-projet">${opt(PROJETS, c.projet)}</select>`)}
+    ${fld('Origine', `<select id="c-source">${opt(SOURCES, c.source)}</select>`)}
     ${fld('Étape', `<select id="c-etape">${[...ETAPES, { id: 'abandon', nom: 'Abandon' }].map(e => `<option value="${e.id}" ${e.id === c.etape ? 'selected' : ''}>${e.nom}</option>`).join('')}</select>`)}
     <div class="field"><span>Intérêt</span><div class="seg" role="group" aria-label="Intérêt" id="c-heat">${[1, 2, 3].map(v => `<button type="button" data-a="pick-heat" data-v="${v}" aria-pressed="${c.chaleur === v}">${CHALEUR[v]}</button>`).join('')}</div></div>
     ${fld('Prochaine action', inp('c-next', c.next?.texte, 'text', 'placeholder="Ex. Envoyer la présentation du métier"'), true)}
     ${fld('Pour le', inp('c-nextd', c.next?.date, 'date'))}<div></div>
     ${fld('Notes', `<textarea id="c-notes" rows="3" placeholder="Parcours, motivations, apport, contraintes…">${esc(c.notes)}</textarea>`, true)}
   </form>
-  ${c.id ? `
+  ${c.id ? `${guideEtape(c)}
   <div class="box"><div class="section-t"><h3>Rendez-vous</h3><button class="btn sm" data-a="new-ev" data-lien="c:${c.id}">${ic('plus')}Planifier un entretien</button></div>
     ${evs.length ? `<div class="list">${evs.map(e => `<div class="row link" data-a="open-ev" data-id="${e.id}" data-cal="${esc(e.calId)}"><span class="time">${fmtD(e.date, { day: 'numeric', month: 'short' })}</span><div class="grow"><div class="t">${esc(e.titre)}</div><div class="s">${e.debut || ''}${e.lieu ? ' · ' + esc(e.lieu) : ''}</div></div>${e.date < today() ? '<span class="chip">passé</span>' : '<span class="chip accent">à venir</span>'}</div>`).join('')}</div>` : '<p class="faint" style="font-size:.9rem">Aucun rendez-vous planifié.</p>'}</div>
   <div class="box"><h3>Historique des échanges</h3>
@@ -955,7 +970,7 @@ function openCandidat(id) {
 }
 function readCandidat(c) {
   c.prenom = $('#c-prenom').value.trim(); c.nom = $('#c-nom').value.trim(); c.tel = $('#c-tel').value.trim(); c.email = $('#c-email').value.trim();
-  c.ville = $('#c-ville').value.trim(); c.profil = $('#c-profil').value; c.source = $('#c-source').value; c.projet = $('#c-projet').value;
+  c.ville = $('#c-ville').value.trim(); c.profil = $('#c-profil').value; c.source = $('#c-source').value;
   c.chaleur = drawerCtx.heat; c.next = { texte: $('#c-next').value.trim(), date: $('#c-nextd').value }; c.notes = $('#c-notes').value;
   return $('#c-etape').value;
 }
@@ -1082,7 +1097,7 @@ const A = {
     if (!$('#c-prenom').value.trim()) { $('#c-prenom').focus(); toast('Le prénom est nécessaire'); return; }
     let c = el.dataset.id ? S.candidats.find(x => x.id === el.dataset.id) : null;
     const isNew = !c; if (isNew) { c = { id: uid(), journal: [], createdAt: today(), etape: 'repere' }; S.candidats.push(c); }
-    const et = readCandidat(c); if (isNew) { c.etape = et; c.journal.push({ date: today(), texte: 'Fiche créée' }); if (et === 'nomme') { c.etape = 'dossier'; setEtape(c, 'nomme'); } } else setEtape(c, et);
+    const et = readCandidat(c); if (isNew) { c.etape = et; c.journal.push({ date: today(), texte: 'Fiche créée' }); if (et === 'nomme') { c.etape = 'e7'; setEtape(c, 'nomme'); } } else setEtape(c, et);
     save(); closeDrawer(); render(); if (isNew) toast('Candidat ajouté');
   },
   'next-stage': el => { const c = S.candidats.find(x => x.id === el.dataset.id); const et = readCandidat(c); setEtape(c, et);
@@ -1165,6 +1180,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'sel-annee') { UI.annee = +e.target.value; render(); return; }
+  if (e.target.dataset.par && drawerCtx?.type === 'c') { const c = S.candidats.find(x => x.id === drawerCtx.id); if (c) { c.parallele = c.parallele || {}; c.parallele[e.target.dataset.par] = e.target.checked; save(); } return; }
   const key = e.target.dataset.aMonth;
   if (key && drawerCtx?.type === 'a') {
     const a = S.agents.find(x => x.id === drawerCtx.id); a.realise = a.realise || {}; a.realise[key] = a.realise[key] || {};
