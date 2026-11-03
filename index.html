@@ -1,0 +1,1267 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Cap Réseau</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0A6B66">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Cap Réseau">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Source+Sans+3:wght@400;500;600;700&display=swap">
+<style>
+/* Mise en page : appli de pilotage terrain — barre latérale sur ordinateur, barre d'onglets en bas sur téléphone, fiches en panneau coulissant. */
+:root{
+  --bg:#F3F5F7; --surface:#FFFFFF; --surface-2:#EBEFF3; --line:#D9E0E6;
+  --ink:#13202B; --ink-2:#475663; --ink-3:#77858F;
+  --accent:#0A6B66; --accent-ink:#FFFFFF; --accent-soft:#DCEFED;
+  --warn:#A55F00; --warn-soft:#FAEED8; --bad:#B0362E; --bad-soft:#F7E0DD; --good:#2B7A4B; --good-soft:#DEF0E4;
+  --bar:#0A6B66; --bar-hi:#0D8C85; --track:#E3E8ED;
+  --shadow:0 1px 2px rgba(19,32,43,.06),0 8px 24px rgba(19,32,43,.08);
+  --f-display:"Sora","Avenir Next","Segoe UI",system-ui,sans-serif;
+  --f-body:"Source Sans 3","Segoe UI",system-ui,-apple-system,sans-serif;
+  --r:10px;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0D141A; --surface:#141D25; --surface-2:#1B2630; --line:#283743;
+  --ink:#E4ECF1; --ink-2:#A7B5C0; --ink-3:#7C8C98;
+  --accent:#3DB5AB; --accent-ink:#04201D; --accent-soft:#12332F;
+  --warn:#E3A341; --warn-soft:#382912; --bad:#EE7B71; --bad-soft:#3B1C19; --good:#5EC38B; --good-soft:#142E1F;
+  --bar:#3DB5AB; --bar-hi:#6FD3C9; --track:#22303B;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0D141A; --surface:#141D25; --surface-2:#1B2630; --line:#283743;
+  --ink:#E4ECF1; --ink-2:#A7B5C0; --ink-3:#7C8C98;
+  --accent:#3DB5AB; --accent-ink:#04201D; --accent-soft:#12332F;
+  --warn:#E3A341; --warn-soft:#382912; --bad:#EE7B71; --bad-soft:#3B1C19; --good:#5EC38B; --good-soft:#142E1F;
+  --bar:#3DB5AB; --bar-hi:#6FD3C9; --track:#22303B;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{min-height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:40;background:var(--bg)}
+[hidden]{display:none!important}
+img{max-width:100%}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:1.55rem;font-weight:700}
+h2{font-size:1.05rem;font-weight:600}
+h3{font-size:.95rem;font-weight:600}
+p{margin:0}
+a{color:var(--accent)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-2)}
+.faint{color:var(--ink-3)}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;font-weight:600;color:var(--ink-3)}
+
+/* ---------- Coquille ---------- */
+.app{display:grid;grid-template-columns:236px minmax(0,1fr);min-height:100vh}
+.side{position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:20px;padding:22px 14px;border-right:1px solid var(--line);background:var(--surface)}
+.brand{display:flex;align-items:center;gap:10px;padding:0 8px}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+.brand b{font-family:var(--f-display);font-size:1.02rem}
+.brand small{display:block;font-size:.75rem;color:var(--ink-3);line-height:1.1}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:11px;padding:9px 10px;border:0;border-radius:8px;background:none;cursor:pointer;color:var(--ink-2);font-weight:600;text-align:left}
+.nav button:hover{background:var(--surface-2);color:var(--ink)}
+.nav button[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.nav .count{margin-left:auto;font-size:.75rem;background:var(--surface-2);color:var(--ink-2);border-radius:20px;padding:1px 8px}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:2px}
+svg.i{width:19px;height:19px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.sync{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--ink-3);padding:6px 10px;min-width:0}
+.sync span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sync .dot{background:var(--ink-3)}
+.sync.good .dot{background:var(--good)} .sync.warn .dot{background:var(--warn)} .sync.bad .dot{background:var(--bad)}
+.sync.busy .dot{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+
+.main{min-width:0;padding-block:26px 60px;padding-left:max(28px,env(safe-area-inset-left,0px));padding-right:max(28px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.topbar{display:none}
+.tabbar{display:none}
+
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.head .sub{color:var(--ink-2);margin-top:4px}
+.head-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* ---------- Écran d'accueil (connexion) ---------- */
+.gate{min-height:100vh;display:grid;place-items:center;padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.gate-card{max-width:460px;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px;display:flex;flex-direction:column;gap:18px;box-shadow:var(--shadow)}
+.gate-card .brand{padding:0}
+.gate-card ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;color:var(--ink-2);font-size:.93rem}
+.gbtn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:11px 16px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer;font-size:1rem;width:100%}
+.gbtn:hover{border-color:var(--ink-3)}
+.gbtn svg{width:20px;height:20px;flex:none}
+.code{font-family:ui-monospace,Menlo,monospace;font-size:.85rem;background:var(--surface-2);padding:2px 6px;border-radius:4px;overflow-wrap:anywhere}
+
+/* ---------- Éléments ---------- */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600;font-size:.92rem;white-space:nowrap;text-decoration:none;color:inherit}
+.btn:hover{border-color:var(--ink-3)}
+.btn:disabled{opacity:.55;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.ghost{border-color:transparent;background:none}
+.btn.ghost:hover{background:var(--surface-2)}
+.btn.danger{color:var(--bad);border-color:var(--bad-soft)}
+.btn.danger.armed{background:var(--bad);color:#fff;border-color:var(--bad)}
+.btn.sm{padding:5px 10px;font-size:.84rem}
+.btn svg.i{width:16px;height:16px}
+.iconbtn{width:34px;height:34px;display:grid;place-items:center;border-radius:8px;border:0;background:none;cursor:pointer;color:var(--ink-2)}
+.iconbtn:hover{background:var(--surface-2);color:var(--ink)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+.panel-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:.76rem;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--surface-2);color:var(--ink-2);white-space:nowrap}
+.chip.good{background:var(--good-soft);color:var(--good)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.accent{background:var(--accent-soft);color:var(--accent)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
+
+.banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:var(--r);background:var(--warn-soft);color:var(--ink);font-size:.92rem}
+.banner svg.i{color:var(--warn)}
+.banner.bad{background:var(--bad-soft)} .banner.bad svg.i{color:var(--bad)}
+.banner .grow{flex:1;min-width:200px}
+
+/* Chiffres clés */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.stat .v{font-family:var(--f-display);font-size:1.6rem;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.15}
+.stat .v small{font-size:.9rem;color:var(--ink-3);font-weight:500}
+.stat .d{font-size:.84rem;color:var(--ink-2)}
+
+.grid2{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+
+/* Listes */
+.list{display:flex;flex-direction:column}
+.row{display:flex;align-items:center;gap:12px;padding:10px 2px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row .grow{flex:1;min-width:0}
+.row .t{font-weight:600}
+.row .s{font-size:.85rem;color:var(--ink-2)}
+.row.link{cursor:pointer;border-radius:6px}
+.row.link:hover{background:var(--surface-2)}
+.check{width:22px;height:22px;border-radius:50%;border:1.8px solid var(--ink-3);background:none;cursor:pointer;display:grid;place-items:center;flex:none;color:transparent}
+.check:hover{border-color:var(--good);color:var(--good)}
+.check svg.i{width:13px;height:13px;stroke-width:2.6}
+.time{font-variant-numeric:tabular-nums;font-weight:600;font-size:.86rem;min-width:46px;color:var(--ink-2)}
+.empty{padding:22px 4px;text-align:center;color:var(--ink-2);display:flex;flex-direction:column;gap:10px;align-items:center}
+.empty.big{padding:48px 16px}
+.empty.big h2{font-size:1.2rem}
+.empty p{max-width:46ch}
+.switch{width:38px;height:22px;border-radius:11px;border:0;background:var(--track);position:relative;cursor:pointer;flex:none;padding:0}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--surface);box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left .15s}
+.switch[aria-checked="true"]{background:var(--accent)} .switch[aria-checked="true"]::after{left:19px}
+
+/* Entonnoir */
+.funnel{display:flex;flex-direction:column;gap:8px}
+.fun{display:grid;grid-template-columns:132px minmax(0,1fr) 28px;align-items:center;gap:10px;font-size:.9rem}
+.fun .bar{height:10px;border-radius:0 4px 4px 0;background:var(--bar)}
+.fun .track{background:var(--track);border-radius:4px;overflow:hidden}
+.fun b{text-align:right;font-variant-numeric:tabular-nums}
+
+/* Progression */
+.prog{display:flex;flex-direction:column;gap:5px}
+.prog-top{display:flex;justify-content:space-between;gap:8px;font-size:.86rem}
+.prog-track{position:relative;height:8px;border-radius:4px;background:var(--track);overflow:visible}
+.prog-fill{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--bar)}
+.prog-fill.warn{background:var(--warn)}
+.prog-mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.55;border-radius:1px}
+
+/* Recrutement : tableau en colonnes */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.search{display:flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0;flex:1 1 220px;max-width:340px}
+.search input{border:0;outline:0;background:none;min-width:0;flex:1}
+.seg{display:inline-flex;padding:3px;border-radius:9px;background:var(--surface-2);gap:2px;flex-wrap:wrap}
+.seg button{border:0;background:none;padding:5px 11px;border-radius:7px;cursor:pointer;font-weight:600;font-size:.86rem;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.board-scroll{overflow-x:auto;margin-inline:-4px;padding:2px 4px 10px}
+.board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(232px,1fr);gap:12px;min-height:300px}
+.kcol{background:var(--surface-2);border-radius:var(--r);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.kcol.over{outline:2px dashed var(--accent);outline-offset:-2px}
+.kcol-h{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 4px}
+.kcol-h span{font-size:.8rem;color:var(--ink-3);font-weight:600}
+.kcard{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:11px 12px;cursor:pointer;display:flex;flex-direction:column;gap:7px;text-align:left;width:100%}
+.kcard:hover{border-color:var(--ink-3)}
+.kcard.dragging{opacity:.45}
+.kcard .n{font-weight:700;display:flex;align-items:center;gap:7px}
+.kcard .p{font-size:.85rem;color:var(--ink-2)}
+.kcard .tags{display:flex;gap:5px;flex-wrap:wrap}
+.kcard .next{font-size:.82rem;display:flex;gap:6px;align-items:baseline;border-top:1px solid var(--line);padding-top:7px;color:var(--ink-2)}
+.kcard .next b{white-space:nowrap}
+.late{color:var(--bad)!important}
+.soon{color:var(--warn)!important}
+.heat{display:inline-flex;gap:2px}
+.heat i{width:5px;height:11px;border-radius:2px;background:var(--track)}
+.heat.h1 i:nth-child(-n+1){background:#6B8FB0}
+.heat.h2 i:nth-child(-n+2){background:var(--warn)}
+.heat.h3 i{background:var(--bad)}
+
+/* Agents */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.acard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:13px;cursor:pointer;text-align:left}
+.acard:hover{border-color:var(--ink-3)}
+.avatar{width:38px;height:38px;border-radius:50%;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-weight:700;font-family:var(--f-display);font-size:.88rem;flex:none;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.acard-h{display:flex;gap:11px;align-items:center}
+.acard-f{display:flex;gap:6px;flex-wrap:wrap}
+
+/* Graphique */
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .grid line{stroke:var(--line);stroke-width:1}
+.chart .axis text{fill:var(--ink-3);font-size:11px;font-family:var(--f-body)}
+.chart .b{fill:var(--bar)}
+.chart .b.cur{fill:var(--bar-hi)}
+.chart .hit{fill:transparent;cursor:default}
+.chart g.col:hover .b{fill:var(--bar-hi)}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--bg);font-size:.82rem;padding:6px 9px;border-radius:6px;white-space:nowrap;transform:translate(-50%,-110%);box-shadow:var(--shadow)}
+.tip b{font-variant-numeric:tabular-nums}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3);font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:middle}
+td.r,th.r{text-align:right}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--surface-2)}
+tfoot td{font-weight:700;border-bottom:0}
+
+/* Agenda */
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);min-height:240px;display:flex;flex-direction:column;min-width:0}
+.day.today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.day-h{padding:9px 10px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:6px}
+.day-h b{font-family:var(--f-display);font-size:1.15rem}
+.day-h span{font-size:.8rem;color:var(--ink-3);text-transform:capitalize}
+.day.today .day-h b{color:var(--accent)}
+.day-b{padding:6px;display:flex;flex-direction:column;gap:5px;flex:1}
+.ev{display:flex;flex-direction:column;gap:1px;padding:6px 7px;border-radius:6px;background:var(--surface-2);cursor:pointer;border:0;text-align:left;width:100%;font-size:.82rem;min-width:0}
+.ev:hover{filter:brightness(.97)}
+.ev .et{display:flex;align-items:center;gap:6px;font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums;font-size:.76rem}
+.ev .en{font-weight:600;overflow-wrap:anywhere;line-height:1.25}
+.add-day{margin-top:auto;border:0;background:none;color:var(--ink-3);cursor:pointer;font-size:.8rem;padding:4px;border-radius:6px;opacity:0}
+.day:hover .add-day,.add-day:focus-visible{opacity:1}
+.add-day:hover{background:var(--surface-2);color:var(--ink)}
+.cal-legend{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.cal-tog{display:inline-flex;align-items:center;gap:7px;padding:5px 10px;border-radius:20px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:.85rem;font-weight:600;max-width:220px}
+.cal-tog span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-tog[aria-pressed="false"]{opacity:.5}
+.cal-tog[aria-pressed="false"] .dot{background:transparent!important;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+
+/* Panneau coulissant */
+.scrim{position:fixed;inset:0;background:rgba(10,18,25,.42);opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(580px,100%);background:var(--bg);z-index:60;transform:translateX(102%);transition:transform .25s ease;display:flex;flex-direction:column;box-shadow:var(--shadow);padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.drawer.on{transform:none}
+.drawer-h{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--surface)}
+.drawer-h h2{flex:1;font-size:1.12rem;min-width:0}
+.drawer-b{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:18px}
+.drawer-f{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--line);background:var(--surface);flex-wrap:wrap}
+.drawer-f .sp{flex:1}
+@media (prefers-reduced-motion:reduce){.drawer,.scrim{transition:none}.sync.busy .dot{animation:none}}
+
+/* Formulaires */
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form .full{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field>span{font-size:.8rem;font-weight:600;color:var(--ink-2)}
+.field input,.field select,.field textarea{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);width:100%;min-width:0}
+.field textarea{resize:vertical;min-height:72px}
+.field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+.section-t{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:12px}
+.journal{display:flex;flex-direction:column;gap:10px}
+.jline{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;font-size:.9rem}
+.jline time{color:var(--ink-3);font-size:.82rem;font-variant-numeric:tabular-nums;padding-top:1px}
+.inline{display:flex;gap:8px}
+.inline input{flex:1;min-width:0;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.months{width:100%}
+.months input{width:100%;min-width:84px;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);text-align:right;font-variant-numeric:tabular-nums}
+.months td{padding:5px 6px}
+.months td:first-child{font-weight:600;white-space:nowrap}
+.visit{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:6px;font-size:.92rem}
+.visit:first-child{border-top:0;padding-top:0}
+.visit dl{margin:0;display:grid;grid-template-columns:96px minmax(0,1fr);gap:4px 10px}
+.visit dt{color:var(--ink-3);font-size:.82rem}
+.visit dd{margin:0;white-space:pre-wrap}
+.note{font-size:.86rem;color:var(--ink-2);background:var(--surface-2);border-radius:8px;padding:10px 12px}
+.acct{display:flex;gap:12px;align-items:center;min-width:0}
+.acct .avatar{width:44px;height:44px}
+.acct .grow{min-width:0;overflow-wrap:anywhere}
+
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-weight:600;font-size:.92rem;opacity:0;transition:.2s;z-index:80;pointer-events:none;max-width:calc(100% - 32px)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- Tablette / téléphone ---------- */
+@media (max-width:1050px){
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .week{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media (max-width:860px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{display:none}
+  .topbar{display:flex;align-items:center;gap:6px;position:sticky;top:env(safe-area-inset-top,0px);z-index:30;background:var(--bg);padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));border-bottom:1px solid var(--line)}
+  .topbar .brand{padding:0;flex:1;min-width:0}
+  .topbar .sync{padding:4px}
+  .topbar .sync span{display:none}
+  .main{padding-block:18px calc(92px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .tabbar{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+  .tabbar button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 2px 8px;font-size:.7rem;font-weight:600;color:var(--ink-3);cursor:pointer}
+  .tabbar button[aria-current="page"]{color:var(--accent)}
+  .week{grid-template-columns:minmax(0,1fr)}
+  .day{min-height:0}
+  .day .day-b:empty::after{content:"Rien de prévu";color:var(--ink-3);font-size:.82rem;padding:2px 4px}
+  .add-day{opacity:1}
+  .drawer{width:100%}
+  h1{font-size:1.35rem}
+}
+@media (max-width:520px){
+  .form{grid-template-columns:minmax(0,1fr)}
+  .stat .v{font-size:1.35rem}
+  .fun{grid-template-columns:104px minmax(0,1fr) 24px;font-size:.84rem}
+  .head-actions .btn span.lg{display:none}
+}
+</style>
+</head>
+<body>
+<div class="gate" id="gate" hidden></div>
+
+<div class="app" id="app" hidden>
+  <aside class="side" aria-label="Navigation">
+    <div class="brand"><div class="brand-mark" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V7z"/><path d="M9 12.5l2 2 4-4.5"/></svg></div><div><b>Cap Réseau</b><small>Pilotage d'inspection</small></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="side-foot">
+      <div class="sync" id="sync-side"><span class="dot"></span><span>…</span></div>
+      <div class="nav" id="nav-foot"></div>
+    </div>
+  </aside>
+
+  <header class="topbar">
+    <div class="brand"><div class="brand-mark" aria-hidden="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V7z"/><path d="M9 12.5l2 2 4-4.5"/></svg></div><div><b>Cap Réseau</b></div></div>
+    <div class="sync" id="sync-top" data-a="go" data-v="reglages" title="État de l'enregistrement"><span class="dot"></span><span>…</span></div>
+    <button class="iconbtn" data-a="go" data-v="reglages" aria-label="Réglages"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
+  </header>
+
+  <main class="main" id="main"><div class="wrap" id="view"></div></main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Navigation"></nav>
+</div>
+
+<div class="scrim" id="scrim" data-a="close"></div>
+<aside class="drawer" id="drawer" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+  <div class="drawer-h"><h2 id="drawer-title"></h2><button class="iconbtn" data-a="close" aria-label="Fermer"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  <div class="drawer-b" id="drawer-b"></div>
+  <div class="drawer-f" id="drawer-f"></div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =========================================================
+   Cap Réseau — version Google
+   - Connexion avec un compte Google (OAuth, sans serveur).
+   - Candidats, agents, chiffres : enregistrés dans le Google Drive
+     de l'utilisatrice (dossier caché réservé à l'application) + copie locale.
+   - Rendez-vous : lus et écrits directement dans Google Agenda.
+   ========================================================= */
+
+/* >>> À RENSEIGNER : identifiant client OAuth créé dans Google Cloud (voir GUIDE.md) <<< */
+const CLIENT_ID = '';
+
+const SCOPES = [
+  'openid', 'email', 'profile',
+  'https://www.googleapis.com/auth/drive.appdata',
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar.events'
+].join(' ');
+const KEY = 'capreseau_v1', TOK_KEY = 'capreseau_tok', USER_KEY = 'capreseau_user', GC_KEY = 'capreseau_g', CID_KEY = 'capreseau_cid', DIRTY_KEY = 'capreseau_dirty';
+const DRIVE_FILE = 'capreseau.json';
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris';
+const REDIRECT = location.origin + location.pathname;
+
+/* ---------- Petits outils ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseD = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const today = () => iso(new Date());
+const addDays = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return iso(d); };
+const weekStart = s => { const d = parseD(s); const k = (d.getDay() + 6) % 7; d.setDate(d.getDate() - k); return iso(d); };
+const daysBetween = (a, b) => Math.round((parseD(b) - parseD(a)) / 86400000);
+const fmtD = (s, o = { weekday: 'short', day: 'numeric', month: 'short' }) => s ? parseD(s).toLocaleDateString('fr-FR', o) : '';
+const fmtLong = s => fmtD(s, { weekday: 'long', day: 'numeric', month: 'long' });
+const fmtTime = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+const MOIS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const MOIS_L = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+const nf = new Intl.NumberFormat('fr-FR');
+const eur = n => nf.format(Math.round(n || 0)) + ' €';
+const eurC = n => { n = n || 0; const a = Math.abs(n);
+  if (a >= 1e6) return (n / 1e6).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' M€';
+  if (a >= 1e4) return nf.format(Math.round(n / 1e3)) + ' k€';
+  return nf.format(Math.round(n)) + ' €'; };
+const pct = n => Math.round(n * 100) + ' %';
+const initials = p => ((p.prenom || '')[0] || '') + ((p.nom || '')[0] || '');
+const fullName = p => [p.prenom, p.nom].filter(Boolean).join(' ') || 'Sans nom';
+const relDay = s => { const n = daysBetween(today(), s);
+  if (n === 0) return "aujourd'hui"; if (n === 1) return 'demain'; if (n === -1) return 'hier';
+  if (n < 0) return `il y a ${-n} j`; if (n < 7) return fmtD(s, { weekday: 'long' }); return fmtD(s, { day: 'numeric', month: 'short' }); };
+const dueClass = s => { if (!s) return ''; const n = daysBetween(today(), s); return n < 0 ? 'late' : n === 0 ? 'soon' : ''; };
+const ls = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { } }, del: k => { try { localStorage.removeItem(k); } catch (e) { } } };
+const ss = { get: k => { try { return sessionStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) { } }, del: k => { try { sessionStorage.removeItem(k); } catch (e) { } } };
+
+/* Icônes (tracé simple) */
+const IC = {
+  jour: '<path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>',
+  recrut: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M17.5 8v6M14.5 11h6"/>',
+  agents: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/>',
+  chiffres: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  agenda: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  reglages: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>',
+  left: '<path d="M15 6l-6 6 6 6"/>', right: '<path d="M9 6l6 6-6 6"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.5-4.5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14.5 4.5L20 16"/><path d="M20 20v-4h-4"/>',
+  ext: '<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.9z"/>',
+  out: '<path d="M10 17l5-5-5-5"/><path d="M15 12H3"/><path d="M13 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/>'
+};
+const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
+const GLOGO = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>';
+
+/* ---------- Référentiels ---------- */
+const ETAPES = [
+  { id: 'repere', nom: 'Repérés' },
+  { id: 'contact', nom: 'Premier contact' },
+  { id: 'decouverte', nom: 'RDV découverte' },
+  { id: 'approfondi', nom: 'Entretiens' },
+  { id: 'dossier', nom: 'Dossier & validation' },
+  { id: 'nomme', nom: 'Nommés agents' }
+];
+const ETAPE_NOM = Object.fromEntries([...ETAPES.map(e => [e.id, e.nom]), ['abandon', 'Abandon']]);
+const PROFILS = ['Conseiller patrimonial en banque', 'Conseiller clientèle banque', 'CGP indépendant', 'Agent d\'une autre compagnie', 'Courtier', 'Commercial terrain', 'Commercial en assurance', 'Reconversion', 'Autre'];
+const SOURCES = ['LinkedIn', 'Cooptation', 'Réseau perso', 'Salon / forum', 'Candidature spontanée', 'Site d\'emploi', 'Autre'];
+const PROJETS = ['Création d\'agence', 'Reprise de portefeuille', 'Association avec un agent', 'À définir'];
+const CHALEUR = { 1: 'Froid', 2: 'Tiède', 3: 'Chaud' };
+const TYPES_EV = { entretien: 'Entretien recrutement', visite: 'Visite d\'agence', accompagnement: 'Accompagnement client', reunion: 'Réunion', admin: 'Administratif', autre: 'Autre' };
+const TYPES_VISITE = ['Visite d\'agence', 'Accompagnement client', 'Point téléphonique', 'Réunion d\'équipe', 'Revue d\'activité'];
+const METRIQUES = {
+  e: { nom: 'Épargne & retraite', court: 'Collecte épargne', fmt: eurC, fmtL: eur, unite: 'collecte' },
+  p: { nom: 'Prévoyance', court: 'Prévoyance (AN)', fmt: eurC, fmtL: eur, unite: 'primes annuelles' },
+  c: { nom: 'Contrats', court: 'Contrats signés', fmt: n => nf.format(n || 0), fmtL: n => nf.format(n || 0) + ' contrats', unite: 'contrats' }
+};
+const DDA_HEURES = 15;
+
+/* ---------- État ---------- */
+function blank() { return { v: 2, updatedAt: 0, settings: { prenom: '', secteur: '', objNomination: 3 }, candidats: [], agents: [], taches: [], gcal: { vis: {}, write: '' } }; }
+function normalize(s) { const b = blank(); for (const k of Object.keys(b)) if (s[k] == null) s[k] = b[k]; s.gcal.vis = s.gcal.vis || {}; delete s.demo; delete s.events; delete s.cals; return s; }
+function load() { try { const r = ls.get(KEY); return r ? normalize(JSON.parse(r)) : null; } catch (e) { return null; } }
+let S = load() || blank();
+const G = { cals: [], events: [], span: null, user: null, needAuth: false, offline: !navigator.onLine, pushing: false, loading: false, authMsg: '', savedAt: null, driveId: ls.get('capreseau_drive_id') || null };
+try { const g = JSON.parse(ls.get(GC_KEY) || 'null'); if (g) { G.cals = g.cals || []; G.events = g.events || []; G.span = g.span || null; } } catch (e) { }
+try { G.user = JSON.parse(ls.get(USER_KEY) || 'null'); } catch (e) { }
+const UI = { view: ss.get('cr_view') || 'jour', q: '', heat: 0, showAb: false, weekStart: weekStart(today()), annee: new Date().getFullYear(), metric: 'e', agentTab: 'fiche' };
+
+/* ---------- Connexion Google (OAuth « implicite », tout se passe dans le navigateur) ---------- */
+const CID = () => CLIENT_ID || ls.get(CID_KEY) || '';
+function getTok() { try { const t = JSON.parse(ls.get(TOK_KEY) || 'null'); if (t && t.exp > Date.now() + 30000) return t.at; } catch (e) { } return null; }
+function tokLeft() { try { const t = JSON.parse(ls.get(TOK_KEY) || 'null'); return t ? t.exp - Date.now() : 0; } catch (e) { return 0; } }
+function signIn(silent) {
+  const p = new URLSearchParams({ client_id: CID(), redirect_uri: REDIRECT, response_type: 'token', scope: SCOPES, include_granted_scopes: 'true', state: 'cr' + uid() });
+  if (silent) { p.set('prompt', 'none'); ss.set('cr_silent', '1'); } else ss.del('cr_silent');
+  if (G.user?.email) p.set('login_hint', G.user.email);
+  ss.set('cr_view', UI.view);
+  location.assign('https://accounts.google.com/o/oauth2/v2/auth?' + p.toString());
+}
+/* Lit le jeton (ou l'erreur) que Google renvoie dans l'adresse après la connexion */
+function handleHash() {
+  if (!location.hash || location.hash.length < 2) return;
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.get('access_token')) { ls.set(TOK_KEY, JSON.stringify({ at: h.get('access_token'), exp: Date.now() + (+h.get('expires_in') || 3600) * 1000 })); G.needAuth = false; }
+  else if (h.get('error')) { const e = h.get('error'); G.authMsg = e === 'access_denied' ? 'Accès refusé. Il faut accepter l\'accès à Drive et à l\'agenda pour utiliser l\'outil.' : (ss.get('cr_silent') ? '' : 'Connexion impossible (' + e + ').'); ls.del(TOK_KEY); }
+  else return;
+  ss.del('cr_silent');
+  history.replaceState(null, '', location.pathname + location.search);
+}
+function signOut() { ls.del(TOK_KEY); ls.del(USER_KEY); ls.del(KEY); ls.del(GC_KEY); ls.del(DIRTY_KEY); ls.del('capreseau_drive_id'); location.reload(); }
+function needAuth() { if (G.needAuth) return; G.needAuth = true; renderSync(); if (!$('#app').hidden && !$('#view').querySelector('.banner.auth')) render(); }
+
+/* Appel aux API Google avec le jeton de connexion */
+async function gfetch(url, opts = {}) {
+  const at = getTok(); if (!at) { needAuth(); throw new Error('noauth'); }
+  let r;
+  try { r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + at } }); }
+  catch (e) { G.offline = true; renderSync(); throw new Error('offline'); }
+  if (G.offline) { G.offline = false; renderSync(); }
+  if (r.status === 401) { needAuth(); throw new Error('401'); }
+  if (!r.ok) { const t = await r.text().catch(() => ''); throw new Error(r.status + ' ' + t.slice(0, 300)); }
+  if (r.status === 204) return null;
+  const ct = r.headers.get('content-type') || ''; return ct.includes('json') ? r.json() : r.text();
+}
+async function loadUser() {
+  const u = await gfetch('https://www.googleapis.com/oauth2/v3/userinfo');
+  G.user = { email: u.email, nom: u.name || u.email, photo: u.picture || '' }; ls.set(USER_KEY, JSON.stringify(G.user));
+  if (!S.settings.prenom && u.given_name) { S.settings.prenom = u.given_name; }
+}
+
+/* ---------- Enregistrement : copie locale + Google Drive (dossier caché de l'application) ---------- */
+let pushTimer = null;
+function save() {
+  S.updatedAt = Date.now(); ls.set(KEY, JSON.stringify(S)); ls.set(DIRTY_KEY, '1');
+  clearTimeout(pushTimer); pushTimer = setTimeout(() => drivePush(), 1500); renderSync();
+}
+const isDirty = () => ls.get(DIRTY_KEY) === '1';
+async function driveFind() {
+  const r = await gfetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,modifiedTime)&q=' + encodeURIComponent(`name='${DRIVE_FILE}'`));
+  return (r.files || [])[0] || null;
+}
+async function drivePush(keepalive) {
+  if (!CID()) return;
+  if (!getTok()) { needAuth(); return; }
+  if (G.pushing) return;
+  G.pushing = true; renderSync();
+  try {
+    const body = JSON.stringify(S);
+    if (!G.driveId) { const f = await driveFind(); if (f) { G.driveId = f.id; ls.set('capreseau_drive_id', f.id); } }
+    if (G.driveId) {
+      await gfetch(`https://www.googleapis.com/upload/drive/v3/files/${G.driveId}?uploadType=media`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body, keepalive: !!keepalive && body.length < 60000 });
+    } else {
+      const b = 'capreseau' + uid();
+      const mp = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: DRIVE_FILE, parents: ['appDataFolder'] })}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${b}--`;
+      const r = await gfetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${b}` }, body: mp });
+      G.driveId = r.id; ls.set('capreseau_drive_id', r.id);
+    }
+    ls.del(DIRTY_KEY); G.savedAt = Date.now();
+  } catch (e) { /* reste marqué « à enregistrer », on réessaiera */ }
+  G.pushing = false; renderSync();
+}
+/* Au démarrage : on prend la version la plus récente entre Drive et la copie locale */
+async function driveLoad() {
+  const f = await driveFind();
+  if (!f) { if (S.candidats.length || S.agents.length || S.taches.length) await drivePush(); else { ls.del(DIRTY_KEY); G.savedAt = Date.now(); } return; }
+  G.driveId = f.id; ls.set('capreseau_drive_id', f.id);
+  const remote = await gfetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+  const rem = (remote && typeof remote === 'object') ? normalize(remote) : null;
+  if (rem && ((rem.updatedAt || 0) >= (S.updatedAt || 0) || !isDirty())) {
+    const prenom = S.settings.prenom; S = rem; if (!S.settings.prenom) S.settings.prenom = prenom;
+    ls.set(KEY, JSON.stringify(S)); ls.del(DIRTY_KEY); G.savedAt = Date.now();
+  } else await drivePush();
+}
+function renderSync() {
+  let cls = 'good', txt = G.savedAt ? 'Enregistré à ' + fmtTime(G.savedAt) : 'Enregistré sur Google Drive';
+  if (!CID()) { cls = ''; txt = 'Enregistré sur cet appareil'; }
+  else if (G.needAuth) { cls = 'bad'; txt = 'Reconnexion Google nécessaire'; }
+  else if (G.offline) { cls = 'warn'; txt = isDirty() ? 'Hors ligne · à enregistrer' : 'Hors ligne · copie locale'; }
+  else if (G.pushing) { cls = 'busy'; txt = 'Enregistrement…'; }
+  else if (isDirty()) { cls = 'warn'; txt = 'Modifications à enregistrer'; }
+  for (const el of $$('.sync')) { el.className = 'sync ' + cls; el.querySelector('span:last-child').textContent = txt; el.title = txt; }
+}
+
+/* ---------- Google Agenda ---------- */
+function cacheG() { ls.set(GC_KEY, JSON.stringify({ cals: G.cals, events: G.events, span: G.span })); }
+const calVisible = c => S.gcal.vis[c.id] != null ? !!S.gcal.vis[c.id] : c.selected;
+const writeCal = () => G.cals.find(c => c.id === S.gcal.write && c.canEdit) || G.cals.find(c => c.primary) || G.cals.find(c => c.canEdit);
+async function loadCalendars() {
+  const r = await gfetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader');
+  G.cals = (r.items || []).map(c => ({ id: c.id, nom: c.summaryOverride || c.summary || c.id, couleur: c.backgroundColor || '#0A6B66', primary: !!c.primary, selected: c.selected !== false, canEdit: c.accessRole === 'owner' || c.accessRole === 'writer' }))
+    .sort((a, b) => (b.primary - a.primary) || a.nom.localeCompare(b.nom));
+  cacheG();
+}
+function gToEv(it, cal) {
+  const allDay = !!it.start?.date;
+  const sdt = it.start?.dateTime || '', edt = it.end?.dateTime || '';
+  const xp = it.extendedProperties?.private || {};
+  const lp = (xp.crLien || '').split(':');
+  return { id: it.id, calId: cal.id, couleur: cal.couleur, calNom: cal.nom, canEdit: cal.canEdit, titre: it.summary || '(sans titre)',
+    date: allDay ? it.start.date : sdt.slice(0, 10), dateFin: allDay ? (it.end?.date || '') : '', allDay,
+    debut: allDay ? '' : sdt.slice(11, 16), fin: allDay ? '' : edt.slice(11, 16), lieu: it.location || '', type: xp.crType || '',
+    lien: lp[1] ? { t: lp[0], id: lp[1] } : null, link: it.htmlLink || '' };
+}
+/* Charge les rendez-vous de tous les agendas sur une plage de dates [min, max[ */
+async function loadEvents(min, max) {
+  if (!G.cals.length) return;
+  G.loading = true;
+  const q = c => new URLSearchParams({ timeMin: parseD(min).toISOString(), timeMax: parseD(max).toISOString(), singleEvents: 'true', orderBy: 'startTime', maxResults: '250', timeZone: TZ }).toString();
+  const res = await Promise.all(G.cals.map(c => gfetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(c.id)}/events?${q(c)}`).then(r => [c, r]).catch(() => null)));
+  for (const x of res) { if (!x) continue; const [c, r] = x;
+    G.events = G.events.filter(e => !(e.calId === c.id && e.date >= min && e.date < max));
+    for (const it of (r.items || [])) if (it.status !== 'cancelled' && it.start) G.events.push(gToEv(it, c)); }
+  G.events = G.events.filter(e => G.cals.some(c => c.id === e.calId));
+  const sp = G.span;
+  G.span = sp && sp.min <= max && sp.max >= min ? { min: sp.min < min ? sp.min : min, max: sp.max > max ? sp.max : max } : { min, max };
+  G.loading = false; cacheG();
+}
+/* Charge la plage seulement si elle n'est pas déjà connue ; renvoie vrai si quelque chose a été chargé */
+async function ensureRange(min, max) {
+  if (!getTok() || G.needAuth || !G.cals.length) return false;
+  if (G.span && G.span.min <= min && G.span.max >= max) return false;
+  try { await loadEvents(min, max); return true; } catch (e) { return false; }
+}
+function allEvents() {
+  const out = [];
+  for (const e of G.events) {
+    const cal = G.cals.find(c => c.id === e.calId); if (cal && !calVisible(cal)) continue;
+    if (e.allDay && e.dateFin && e.dateFin > addDays(e.date, 1)) { for (let d = e.date; d < e.dateFin; d = addDays(d, 1)) out.push({ ...e, date: d }); }
+    else out.push(e);
+  }
+  return out.sort((a, b) => (a.date + (a.debut || '00:00')).localeCompare(b.date + (b.debut || '00:00')));
+}
+const evLies = (t, id) => G.events.filter(e => e.lien?.t === t && e.lien.id === id).sort((a, b) => (a.date + a.debut).localeCompare(b.date + b.debut));
+async function gSaveEvent(data, id, calId) {
+  const allDay = !data.debut;
+  let fin = data.fin; if (!allDay && (!fin || fin <= data.debut)) { const [h, m] = data.debut.split(':').map(Number); fin = `${pad(Math.min(23, h + 1))}:${pad(m)}`; }
+  const body = { summary: data.titre, location: data.lieu || '',
+    start: allDay ? { date: data.date } : { dateTime: `${data.date}T${data.debut}:00`, timeZone: TZ },
+    end: allDay ? { date: addDays(data.date, 1) } : { dateTime: `${data.date}T${fin}:00`, timeZone: TZ },
+    extendedProperties: { private: { crApp: '1', crType: data.type || '', crLien: data.lien ? `${data.lien.t}:${data.lien.id}` : '' } } };
+  const base = 'https://www.googleapis.com/calendar/v3/calendars/';
+  const cal = id ? G.cals.find(c => c.id === calId) : writeCal();
+  if (!cal) throw new Error('Aucun agenda Google modifiable');
+  const r = id ? await gfetch(`${base}${encodeURIComponent(cal.id)}/events/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+             : await gfetch(`${base}${encodeURIComponent(cal.id)}/events`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const ev = gToEv(r, cal); G.events = G.events.filter(e => e.id !== ev.id); G.events.push(ev); cacheG(); return ev;
+}
+async function gDeleteEvent(id, calId) {
+  await gfetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  G.events = G.events.filter(e => e.id !== id); cacheG();
+}
+
+/* ---------- Calculs ---------- */
+const enCours = () => S.candidats.filter(c => c.etape !== 'nomme' && c.etape !== 'abandon');
+function realiseAnnee(agent, y, k) { let s = 0; for (const [mo, v] of Object.entries(agent.realise || {})) if (mo.startsWith(y + '-')) s += +v[k] || 0; return s; }
+function mensuel(y, k, agents = S.agents) { const arr = Array(12).fill(0); for (const a of agents) for (const [mo, v] of Object.entries(a.realise || {})) if (mo.startsWith(y + '-')) arr[+mo.slice(5) - 1] += +v[k] || 0; return arr; }
+/* Part de l'objectif qu'on devrait avoir atteinte aujourd'hui (depuis la nomination si elle est dans l'année) */
+function prorata(agent, y = new Date().getFullYear()) {
+  const now = new Date(); if (y < now.getFullYear()) return 1; if (y > now.getFullYear()) return 0;
+  const start = new Date(Math.max(new Date(y, 0, 1), agent.dateNomination ? parseD(agent.dateNomination) : new Date(y, 0, 1)));
+  const end = new Date(y, 11, 31); if (now <= start) return 0;
+  return Math.min(1, (now - start) / (end - start));
+}
+const ddaHeures = (a, y = new Date().getFullYear()) => (a.formations || []).filter(f => f.date?.startsWith(y + '')).reduce((s, f) => s + (+f.heures || 0), 0);
+const derniereVisite = a => (a.visites || []).map(v => v.date).sort().pop();
+function todos() {
+  const t = today(), lim = addDays(t, 3), out = [];
+  for (const c of enCours()) if (c.next?.texte && c.next.date && c.next.date <= lim) out.push({ k: 'c', id: c.id, date: c.next.date, titre: c.next.texte, qui: fullName(c), sous: ETAPE_NOM[c.etape] });
+  for (const x of S.taches) if (!x.fait && (!x.date || x.date <= lim)) {
+    const a = x.lien?.t === 'a' ? S.agents.find(z => z.id === x.lien.id) : x.lien?.t === 'c' ? S.candidats.find(z => z.id === x.lien.id) : null;
+    out.push({ k: 't', id: x.id, date: x.date, titre: x.titre, qui: a ? fullName(a) : '', sous: 'Tâche', lien: x.lien });
+  }
+  return out.sort((a, b) => (a.date || '9').localeCompare(b.date || '9'));
+}
+function alertes() {
+  const out = [], y = new Date().getFullYear(), m = new Date().getMonth();
+  for (const a of S.agents) {
+    const h = ddaHeures(a, y);
+    if (h < DDA_HEURES) out.push({ sev: m >= 8 ? 'bad' : 'warn', id: a.id, titre: `${fullName(a)} — formation DDA`, texte: `${nf.format(h)} h sur ${DDA_HEURES} h cette année` });
+    const pr = prorata(a, y);
+    if (pr > 0.08 && a.obj?.e) { const r = realiseAnnee(a, y, 'e') / (a.obj.e * pr); if (r < 0.8) out.push({ sev: 'warn', id: a.id, titre: `${fullName(a)} — épargne en retard`, texte: `${pct(r)} du rythme attendu` }); }
+    if (pr > 0.08 && a.obj?.p) { const r = realiseAnnee(a, y, 'p') / (a.obj.p * pr); if (r < 0.8) out.push({ sev: 'warn', id: a.id, titre: `${fullName(a)} — prévoyance en retard`, texte: `${pct(r)} du rythme attendu` }); }
+    const dv = derniereVisite(a);
+    if (!dv || daysBetween(dv, today()) > 30) out.push({ sev: 'warn', id: a.id, titre: `${fullName(a)} — pas de visite récente`, texte: dv ? `Dernière visite ${relDay(dv)}` : 'Aucune visite enregistrée' });
+  }
+  return out;
+}
+
+/* ---------- Navigation ---------- */
+const VUES = [
+  { id: 'jour', nom: "Aujourd'hui", court: 'Accueil', ic: 'jour' },
+  { id: 'recrut', nom: 'Recrutement', court: 'Recrutement', ic: 'recrut' },
+  { id: 'agents', nom: 'Mes agents', court: 'Agents', ic: 'agents' },
+  { id: 'chiffres', nom: 'Chiffres', court: 'Chiffres', ic: 'chiffres' },
+  { id: 'agenda', nom: 'Agenda', court: 'Agenda', ic: 'agenda' }
+];
+function renderNav() {
+  const cur = v => UI.view === v ? ' aria-current="page"' : '';
+  const cnt = { recrut: enCours().length, agents: S.agents.length };
+  $('#nav').innerHTML = VUES.map(v => `<button data-a="go" data-v="${v.id}"${cur(v.id)}>${ic(v.ic)}${v.nom}${cnt[v.id] != null ? `<span class="count">${cnt[v.id]}</span>` : ''}</button>`).join('');
+  $('#nav-foot').innerHTML = `<button data-a="go" data-v="reglages"${cur('reglages')}>${ic('reglages')}Réglages</button>`;
+  $('#tabbar').innerHTML = VUES.map(v => `<button data-a="go" data-v="${v.id}"${cur(v.id)}>${ic(v.ic)}${v.court}</button>`).join('');
+}
+function go(v) { UI.view = v; try { sessionStorage.setItem('cr_view', v); } catch (e) { } render(); window.scrollTo(0, 0); }
+function render() {
+  renderNav();
+  const V = { jour: vueJour, recrut: vueRecrut, agents: vueAgents, chiffres: vueChiffres, agenda: vueAgenda, reglages: vueReglages }[UI.view] || vueJour;
+  $('#view').innerHTML = bandeau() + V();
+  if (UI.view === 'recrut') renderBoard();
+  if (UI.view === 'chiffres') bindChart();
+  if (UI.view === 'agenda' || UI.view === 'jour') ensureView();
+  renderSync();
+}
+function bandeau() {
+  if (CID() && G.needAuth) return `<div class="banner bad auth">${ic('info')}<div class="grow"><b>Connexion Google expirée.</b> Les modifications restent sur cet appareil et seront enregistrées dès la reconnexion.</div><button class="btn sm primary" data-a="signin">Se reconnecter</button></div>`;
+  if (!CID()) return `<div class="banner">${ic('info')}<div class="grow"><b>Mode local.</b> Google n'est pas encore configuré : les données restent dans ce navigateur.</div></div>`;
+  return '';
+}
+function demarrage() {
+  if (S.candidats.length || S.agents.length) return '';
+  return `<section class="panel"><div class="panel-h"><h2>Pour bien démarrer</h2></div><div class="list">
+    <div class="row"><span class="chip accent">1</span><div class="grow"><div class="t">Vérifier le profil</div><div class="s">Prénom, secteur et objectif de nominations de l'année.</div></div><button class="btn sm" data-a="go" data-v="reglages">Réglages</button></div>
+    <div class="row"><span class="chip accent">2</span><div class="grow"><div class="t">Ajouter un premier candidat</div><div class="s">Un futur agent repéré sur LinkedIn, par cooptation ou en salon.</div></div><button class="btn sm primary" data-a="new-c">Ajouter</button></div>
+    <div class="row"><span class="chip accent">3</span><div class="grow"><div class="t">Planifier un rendez-vous</div><div class="s">Il s'ajoute directement dans Google Agenda.</div></div><button class="btn sm" data-a="new-ev">Rendez-vous</button></div>
+  </div></section>`;
+}
+function ensureView() {
+  const ws = UI.view === 'agenda' ? UI.weekStart : weekStart(today());
+  ensureRange(addDays(ws, -7), addDays(ws, 21)).then(ch => { if (ch && !drawerCtx && (UI.view === 'agenda' || UI.view === 'jour')) render(); });
+}
+const BRAND_SVG = '<svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 4v5c0 4.5-3 7.8-7 9-4-1.2-7-4.5-7-9V7z"/><path d="M9 12.5l2 2 4-4.5"/></svg>';
+function showGate() {
+  $('#app').hidden = true; $('#gate').hidden = false;
+  $('#gate').innerHTML = `<div class="gate-card">
+    <div class="brand"><div class="brand-mark" aria-hidden="true">${BRAND_SVG}</div><div><b>Cap Réseau</b><small>Pilotage d'inspection</small></div></div>
+    <div><h1>Bienvenue</h1><p class="muted" style="margin-top:6px">Recrutement des futurs agents, suivi du réseau et agenda, au même endroit.</p></div>
+    <ul><li>Les données sont enregistrées dans votre Google Drive, dans un dossier privé réservé à l'application.</li>
+      <li>Les rendez-vous sont lus et ajoutés dans Google Agenda.</li>
+      <li>Une copie reste sur l'appareil pour fonctionner sans réseau.</li></ul>
+    ${G.authMsg ? `<div class="banner bad">${esc(G.authMsg)}</div>` : ''}
+    <button class="gbtn" data-a="signin">${GLOGO}Se connecter avec Google</button>
+    <p class="faint" style="font-size:.82rem">Google peut afficher « Google n'a pas validé cette application » : c'est normal pour un outil privé. Choisir « Paramètres avancés », puis « Accéder à Cap Réseau ».</p></div>`;
+}
+function showApp() { $('#gate').hidden = true; $('#app').hidden = false; render(); }
+
+/* ---------- Vue : Aujourd'hui ---------- */
+function vueJour() {
+  const t = today(), ws = weekStart(t), we = addDays(ws, 6), y = new Date().getFullYear();
+  const ec = enCours(), chauds = ec.filter(c => c.chaleur === 3).length;
+  const ent = allEvents().filter(e => e.type === 'entretien' && e.date >= ws && e.date <= we).length;
+  const nommes = S.agents.filter(a => (a.dateNomination || '').startsWith(y)).length, obj = +S.settings.objNomination || 0;
+  const coll = S.agents.reduce((s, a) => s + realiseAnnee(a, y, 'e'), 0), objE = S.agents.reduce((s, a) => s + (+a.obj?.e || 0), 0);
+  const prev = S.agents.reduce((s, a) => s + realiseAnnee(a, y, 'p'), 0);
+  const td = todos(), evs = allEvents().filter(e => e.date === t), al = alertes();
+  const max = Math.max(1, ...ETAPES.map(e => S.candidats.filter(c => c.etape === e.id).length));
+  const hello = S.settings.prenom ? `Bonjour ${esc(S.settings.prenom)}` : 'Bonjour';
+  return `
+  <div class="head"><div><h1>${hello}</h1><p class="sub" style="text-transform:capitalize">${fmtLong(t)}${S.settings.secteur ? ' · ' + esc(S.settings.secteur) : ''}</p></div>
+    <div class="head-actions"><button class="btn" data-a="new-ev">${ic('plus')}<span class="lg">Rendez-vous</span></button><button class="btn primary" data-a="new-c">${ic('plus')}Candidat</button></div></div>
+  ${demarrage()}
+  <div class="stats">
+    <div class="stat"><span class="label">Candidats en cours</span><span class="v">${ec.length}</span><span class="d">${chauds} chaud${chauds > 1 ? 's' : ''}</span></div>
+    <div class="stat"><span class="label">Entretiens cette semaine</span><span class="v">${ent}</span><span class="d">${relances()}</span></div>
+    <div class="stat"><span class="label">Agents nommés ${y}</span><span class="v">${nommes}<small> / ${obj}</small></span><span class="d">Objectif de l'année</span></div>
+    <div class="stat"><span class="label">Collecte du réseau ${y}</span><span class="v">${S.agents.length ? eurC(coll) : '—'}</span><span class="d">${S.agents.length ? (objE ? pct(coll / objE) + ' de l\'objectif · ' : '') + eurC(prev) + ' prévoyance' : 'Pas encore d\'agent'}</span></div>
+  </div>
+  <div class="grid2">
+    <div class="col">
+      <section class="panel"><div class="panel-h"><h2>À faire</h2><button class="btn sm ghost" data-a="new-t">${ic('plus')}Tâche</button></div>
+        ${td.length ? `<div class="list">${td.map(x => `
+          <div class="row"><button class="check" data-a="${x.k === 'c' ? 'done-c' : 'done-t'}" data-id="${x.id}" aria-label="Marquer comme fait">${ic('check')}</button>
+            <div class="grow ${x.k === 'c' || x.qui ? 'link' : ''}" ${x.k === 'c' ? `data-a="open-c" data-id="${x.id}"` : ''} style="cursor:${x.k === 'c' ? 'pointer' : 'default'}"><div class="t">${esc(x.titre)}</div><div class="s">${esc(x.qui)}${x.qui ? ' · ' : ''}${esc(x.sous)}</div></div>
+            ${x.date ? `<span class="chip ${daysBetween(t, x.date) < 0 ? 'bad' : daysBetween(t, x.date) === 0 ? 'warn' : ''}">${relDay(x.date)}</span>` : ''}</div>`).join('')}</div>`
+          : `<div class="empty"><p>Rien d'urgent pour les trois prochains jours.</p></div>`}
+      </section>
+      <section class="panel"><div class="panel-h"><h2>Recrutement</h2><button class="btn sm ghost" data-a="go" data-v="recrut">Voir le tableau ${ic('arrow')}</button></div>
+        <div class="funnel">${ETAPES.map(e => { const n = S.candidats.filter(c => c.etape === e.id).length;
+          return `<div class="fun"><span>${e.nom}</span><div class="track"><div class="bar" style="width:${n ? Math.max(4, n / max * 100) : 0}%"></div></div><b>${n}</b></div>`; }).join('')}</div>
+      </section>
+    </div>
+    <div class="col">
+      <section class="panel"><div class="panel-h"><h2>Agenda du jour</h2><button class="btn sm ghost" data-a="go" data-v="agenda">Semaine ${ic('arrow')}</button></div>
+        ${evs.length ? `<div class="list">${evs.map(e => `<div class="row link" data-a="open-ev" data-id="${e.id}" data-cal="${e.calId}"><span class="time">${e.debut || 'Journée'}</span><span class="dot" style="background:${e.couleur}"></span><div class="grow"><div class="t">${esc(e.titre)}</div><div class="s">${esc(e.calNom)}${e.lieu ? ' · ' + esc(e.lieu) : ''}</div></div></div>`).join('')}</div>`
+          : `<div class="empty"><p>Aucun rendez-vous aujourd'hui.</p></div>`}
+      </section>
+      <section class="panel"><div class="panel-h"><h2>Points d'attention</h2></div>
+        ${al.length ? `<div class="list">${al.slice(0, 6).map(x => `<div class="row link" data-a="open-a" data-id="${x.id}"><span class="chip ${x.sev}">${x.sev === 'bad' ? 'Urgent' : 'À suivre'}</span><div class="grow"><div class="t">${esc(x.titre)}</div><div class="s">${esc(x.texte)}</div></div></div>`).join('')}</div>`
+          : `<div class="empty"><p>${S.agents.length ? 'Tout est en ordre côté agents.' : 'Les alertes (formation DDA, retard sur objectif, visites) apparaîtront dès le premier agent nommé.'}</p></div>`}
+      </section>
+    </div>
+  </div>`;
+}
+function relances() { const n = enCours().filter(c => c.next?.date && c.next.date < today()).length; return n ? `<span class="late">${n} relance${n > 1 ? 's' : ''} en retard</span>` : 'Aucune relance en retard'; }
+
+/* ---------- Vue : Recrutement ---------- */
+function vueRecrut() {
+  const ab = S.candidats.filter(c => c.etape === 'abandon').length;
+  return `
+  <div class="head"><div><h1>Recrutement</h1><p class="sub">Futurs agents généraux, de la première prise de contact à la nomination.</p></div>
+    <div class="head-actions"><button class="btn primary" data-a="new-c">${ic('plus')}Candidat</button></div></div>
+  <div class="toolbar">
+    <label class="search">${ic('search')}<input id="q-cand" type="search" placeholder="Nom, ville, profil…" value="${esc(UI.q)}" aria-label="Rechercher un candidat"></label>
+    <div class="seg" role="group" aria-label="Filtrer par intérêt">${[[0, 'Tous'], [3, 'Chauds'], [2, 'Tièdes'], [1, 'Froids']].map(([v, l]) => `<button data-a="heat" data-v="${v}" aria-pressed="${UI.heat === v}">${l}</button>`).join('')}</div>
+    <button class="btn sm ghost" data-a="toggle-ab">${UI.showAb ? 'Masquer' : 'Voir'} les abandons (${ab})</button>
+  </div>
+  <div class="board-scroll"><div class="board" id="board"></div></div>
+  <p class="faint" style="font-size:.85rem">Sur ordinateur, glisser une carte d'une colonne à l'autre pour changer d'étape. Passer un candidat en « Nommés agents » crée sa fiche agent.</p>`;
+}
+function renderBoard() {
+  const q = UI.q.trim().toLowerCase();
+  const match = c => (!UI.heat || c.chaleur === UI.heat) && (!q || [c.prenom, c.nom, c.ville, c.profil, c.source, c.projet].join(' ').toLowerCase().includes(q));
+  const cols = [...ETAPES, ...(UI.showAb ? [{ id: 'abandon', nom: 'Abandons' }] : [])];
+  $('#board').innerHTML = cols.map(e => {
+    const list = S.candidats.filter(c => c.etape === e.id && match(c)).sort((a, b) => b.chaleur - a.chaleur || (a.next?.date || '9').localeCompare(b.next?.date || '9'));
+    return `<section class="kcol" data-col="${e.id}"><div class="kcol-h"><h3>${e.nom}</h3><span>${list.length}</span></div>
+      ${list.map(card).join('') || `<p class="faint" style="font-size:.84rem;padding:4px">Aucun candidat</p>`}</section>`;
+  }).join('');
+}
+function card(c) {
+  const n = c.next?.texte ? `<div class="next"><b class="${dueClass(c.next.date)}">${c.next.date ? relDay(c.next.date) : 'À planifier'}</b><span>${esc(c.next.texte)}</span></div>` : '';
+  return `<button class="kcard" draggable="true" data-a="open-c" data-id="${c.id}">
+    <span class="n"><span class="heat h${c.chaleur}" title="${CHALEUR[c.chaleur]}"><i></i><i></i><i></i></span>${esc(fullName(c))}</span>
+    <span class="p">${esc(c.profil || '')}${c.ville ? ' · ' + esc(c.ville) : ''}</span>
+    ${c.projet ? `<span class="tags"><span class="chip">${esc(c.projet)}</span></span>` : ''}${n}</button>`;
+}
+
+/* ---------- Vue : Agents ---------- */
+function vueAgents() {
+  const y = new Date().getFullYear();
+  if (!S.agents.length) return `<div class="head"><div><h1>Mes agents</h1></div></div>
+    <div class="panel empty big"><h2>Pas encore d'agent dans le réseau</h2><p>Les premiers viendront du recrutement : quand un candidat passe à l'étape « Nommés agents », sa fiche est créée ici automatiquement.</p>
+    <div class="head-actions"><button class="btn primary" data-a="go" data-v="recrut">Voir le recrutement</button><button class="btn" data-a="new-a">Ajouter un agent</button></div></div>`;
+  return `<div class="head"><div><h1>Mes agents</h1><p class="sub">${S.agents.length} agent${S.agents.length > 1 ? 's' : ''} généra${S.agents.length > 1 ? 'ux' : 'l'} · objectifs ${y}</p></div>
+    <div class="head-actions"><button class="btn primary" data-a="new-a">${ic('plus')}Agent</button></div></div>
+  <div class="cards">${S.agents.map(a => {
+    const pr = prorata(a, y), h = ddaHeures(a, y), dv = derniereVisite(a);
+    return `<button class="acard" data-a="open-a" data-id="${a.id}">
+      <div class="acard-h"><span class="avatar">${esc(initials(a).toUpperCase())}</span><div style="min-width:0"><h3>${esc(fullName(a))}</h3><p class="s muted" style="font-size:.86rem">${esc(a.agence || '')}${a.ville ? ' · ' + esc(a.ville) : ''}</p></div></div>
+      ${progBar('Épargne & retraite', realiseAnnee(a, y, 'e'), a.obj?.e, pr, eurC)}
+      ${progBar('Prévoyance', realiseAnnee(a, y, 'p'), a.obj?.p, pr, eurC)}
+      <div class="acard-f"><span class="chip ${h >= DDA_HEURES ? 'good' : 'warn'}">DDA ${nf.format(h)} / ${DDA_HEURES} h</span><span class="chip">${dv ? 'Visite ' + relDay(dv) : 'Jamais visité'}</span>${a.dateNomination ? `<span class="chip">Nommé ${fmtD(a.dateNomination, { month: 'short', year: 'numeric' })}</span>` : ''}</div>
+    </button>`; }).join('')}</div>`;
+}
+function progBar(nom, val, obj, pr, fmt) {
+  if (!obj) return `<div class="prog"><div class="prog-top"><span>${nom}</span><b class="num">${fmt(val)}</b></div><div class="prog-track"></div></div>`;
+  const r = val / obj, late = pr > 0.08 && r < pr * 0.8;
+  return `<div class="prog"><div class="prog-top"><span>${nom}</span><span class="num"><b>${fmt(val)}</b> <span class="faint">/ ${fmt(obj)}</span></span></div>
+    <div class="prog-track" title="Le trait indique où il faudrait être aujourd'hui"><div class="prog-fill ${late ? 'warn' : ''}" style="width:${Math.min(100, r * 100)}%"></div>${pr > 0 && pr < 1 ? `<div class="prog-mark" style="left:${pr * 100}%"></div>` : ''}</div></div>`;
+}
+
+/* ---------- Vue : Chiffres ---------- */
+function vueChiffres() {
+  const y = UI.annee, k = UI.metric, M = METRIQUES[k];
+  const years = new Set([new Date().getFullYear()]); S.agents.forEach(a => Object.keys(a.realise || {}).forEach(m => years.add(+m.slice(0, 4))));
+  const head = `<div class="head"><div><h1>Chiffres du réseau</h1><p class="sub">Saisie mois par mois dans la fiche de chaque agent.</p></div>
+    <div class="head-actions"><label class="field" style="flex-direction:row;align-items:center;gap:8px"><span>Année</span><select id="sel-annee">${[...years].sort().map(v => `<option ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div></div>`;
+  if (!S.agents.length) return head + `<div class="panel empty big"><h2>Les chiffres apparaîtront avec les premiers agents</h2><p>Collecte épargne et retraite, prévoyance en affaires nouvelles, nombre de contrats : tout se consolide ici, agent par agent et mois par mois.</p></div>`;
+  const tot = S.agents.reduce((s, a) => s + realiseAnnee(a, y, k), 0);
+  const obj = k === 'c' ? 0 : S.agents.reduce((s, a) => s + (+a.obj?.[k] || 0), 0);
+  const now = new Date(), fy = y < now.getFullYear() ? 1 : y > now.getFullYear() ? 0 : (now - new Date(y, 0, 1)) / (new Date(y + 1, 0, 1) - new Date(y, 0, 1));
+  const monthsWithData = mensuel(y, k).filter(v => v > 0).length;
+  const proj = fy > 0 && fy < 1 && monthsWithData ? tot / monthsWithData * (12 - now.getMonth() - 1) + tot : tot;
+  const vals = mensuel(y, k);
+  return head + `
+  <div class="seg" role="group" aria-label="Indicateur">${Object.entries(METRIQUES).map(([id, m]) => `<button data-a="metric" data-v="${id}" aria-pressed="${k === id}">${m.nom}</button>`).join('')}</div>
+  <div class="stats">
+    <div class="stat"><span class="label">Réalisé ${y}</span><span class="v">${M.fmt(tot)}</span><span class="d">${M.unite}</span></div>
+    <div class="stat"><span class="label">Objectif réseau</span><span class="v">${obj ? M.fmt(obj) : '—'}</span><span class="d">${obj ? 'somme des objectifs agents' : 'pas d\'objectif sur cet indicateur'}</span></div>
+    <div class="stat"><span class="label">Atteinte</span><span class="v">${obj ? pct(tot / obj) : '—'}</span><span class="d">${obj && fy < 1 ? 'à ce jour' : ''}</span></div>
+    <div class="stat"><span class="label">Projection fin ${y}</span><span class="v">${M.fmt(proj)}</span><span class="d">au rythme moyen actuel</span></div>
+  </div>
+  <section class="panel"><div class="panel-h"><h2>${M.court} par mois</h2><span class="faint" style="font-size:.85rem">Tous agents</span></div>
+    <div class="chart" id="chart">${barChart(vals, M.fmt, y)}</div></section>
+  <section class="panel"><div class="panel-h"><h2>Par agent</h2></div>
+    <div class="tbl-wrap"><table><thead><tr><th>Agent</th><th class="r">Réalisé</th><th class="r">Objectif</th><th class="r">Atteinte</th><th style="width:30%">Progression</th></tr></thead><tbody>
+    ${S.agents.map(a => { const v = realiseAnnee(a, y, k), o = k === 'c' ? 0 : +a.obj?.[k] || 0, pr = prorata(a, y);
+      return `<tr class="click" data-a="open-a" data-id="${a.id}" data-tab="chiffres"><td><b>${esc(fullName(a))}</b><div class="faint" style="font-size:.82rem">${esc(a.agence || '')}</div></td><td class="r">${M.fmtL(v)}</td><td class="r">${o ? M.fmtL(o) : '—'}</td><td class="r">${o ? pct(v / o) : '—'}</td>
+      <td>${o ? `<div class="prog-track"><div class="prog-fill ${pr > .08 && v / o < pr * .8 ? 'warn' : ''}" style="width:${Math.min(100, v / o * 100)}%"></div>${pr > 0 && pr < 1 ? `<div class="prog-mark" style="left:${pr * 100}%"></div>` : ''}</div>` : ''}</td></tr>`; }).join('')}
+    </tbody><tfoot><tr><td>Total</td><td class="r">${M.fmtL(tot)}</td><td class="r">${obj ? M.fmtL(obj) : '—'}</td><td class="r">${obj ? pct(tot / obj) : '—'}</td><td></td></tr></tfoot></table></div>
+    <p class="faint" style="font-size:.84rem;margin-top:10px">Le trait vertical sur chaque barre indique où l'agent devrait en être aujourd'hui, au prorata depuis sa nomination.</p></section>`;
+}
+function niceMax(v) { if (v <= 0) return 1; const p = 10 ** Math.floor(Math.log10(v)), n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+function barChart(vals, fmt, y) {
+  const W = 760, H = 240, L = 54, R = 8, T = 12, B = 26, pw = W - L - R, ph = H - T - B;
+  const max = niceMax(Math.max(...vals)), step = pw / 12, bw = Math.min(34, step * 0.56);
+  const cur = y === new Date().getFullYear() ? new Date().getMonth() : -1;
+  let g = '<g class="grid">', ax = '<g class="axis">';
+  for (let i = 0; i <= 4; i++) { const v = max * i / 4, yy = T + ph - ph * i / 4; g += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}"/>`; ax += `<text x="${L - 8}" y="${yy + 4}" text-anchor="end">${fmt(v)}</text>`; }
+  g += '</g>';
+  let bars = '';
+  vals.forEach((v, i) => { const x = L + step * i + (step - bw) / 2, h = v / max * ph, yy = T + ph - h, r = Math.min(4, h / 2);
+    ax += `<text x="${L + step * i + step / 2}" y="${H - 6}" text-anchor="middle">${MOIS[i]}</text>`;
+    const path = h > 0 ? `<path class="b ${i === cur ? 'cur' : ''}" d="M${x},${T + ph} V${yy + r} Q${x},${yy} ${x + r},${yy} H${x + bw - r} Q${x + bw},${yy} ${x + bw},${yy + r} V${T + ph} Z"/>` : '';
+    bars += `<g class="col" data-i="${i}" data-v="${v}">${path}<rect class="hit" x="${L + step * i}" y="${T}" width="${step}" height="${ph}"/></g>`; });
+  ax += '</g>';
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Barres mensuelles ${y}">${g}${bars}${ax}</svg><div class="tip" id="tip" hidden></div>`;
+}
+function bindChart() {
+  const ch = $('#chart'); if (!ch) return; const tip = $('#tip'), M = METRIQUES[UI.metric];
+  ch.addEventListener('mousemove', e => { const g = e.target.closest('g.col'); if (!g) { tip.hidden = true; return; }
+    const r = ch.getBoundingClientRect(); tip.hidden = false; tip.innerHTML = `${MOIS_L[+g.dataset.i]} ${UI.annee} · <b>${M.fmtL(+g.dataset.v)}</b>`;
+    tip.style.left = Math.min(r.width - 80, Math.max(80, e.clientX - r.left)) + 'px'; tip.style.top = (e.clientY - r.top) + 'px'; });
+  ch.addEventListener('mouseleave', () => tip.hidden = true);
+}
+
+/* ---------- Vue : Agenda ---------- */
+function vueAgenda() {
+  const ws = UI.weekStart, t = today(), evs = allEvents();
+  const days = Array.from({ length: 7 }, (_, i) => addDays(ws, i));
+  const d0 = parseD(ws), d6 = parseD(days[6]);
+  const lbl = d0.getMonth() === d6.getMonth() ? `${d0.getDate()} – ${d6.getDate()} ${MOIS_L[d6.getMonth()].toLowerCase()} ${d6.getFullYear()}` : `${d0.getDate()} ${MOIS[d0.getMonth()]} – ${d6.getDate()} ${MOIS[d6.getMonth()]} ${d6.getFullYear()}`;
+  const sub = !CID() ? 'Google n\'est pas encore configuré : l\'agenda s\'affichera après la mise en ligne.' : G.cals.length ? 'Google Agenda. Les rendez-vous créés ici y sont ajoutés directement.' : 'Chargement de Google Agenda…';
+  return `
+  <div class="head"><div><h1>Agenda</h1><p class="sub">${sub}</p></div>
+    <div class="head-actions">${CID() ? `<button class="iconbtn" data-a="refresh" aria-label="Actualiser l'agenda" title="Actualiser">${ic('refresh')}</button>` : ''}<button class="btn primary" data-a="new-ev">${ic('plus')}Rendez-vous</button></div></div>
+  <div class="toolbar" style="justify-content:space-between">
+    <div class="toolbar"><button class="iconbtn" data-a="week" data-v="-7" aria-label="Semaine précédente">${ic('left')}</button><b class="num" style="min-width:12ch">${lbl}</b><button class="iconbtn" data-a="week" data-v="7" aria-label="Semaine suivante">${ic('right')}</button>
+      <button class="btn sm" data-a="week" data-v="0">Cette semaine</button></div>
+    <div class="cal-legend">${G.cals.map(c => `<button class="cal-tog" data-a="cal-vis" data-id="${esc(c.id)}" aria-pressed="${calVisible(c)}"><span class="dot" style="background:${esc(c.couleur)}"></span><span>${esc(c.nom)}</span></button>`).join('')}</div>
+  </div>
+  <div class="week">${days.map(d => { const list = evs.filter(e => e.date === d);
+    return `<section class="day ${d === t ? 'today' : ''}"><div class="day-h"><b>${parseD(d).getDate()}</b><span>${fmtD(d, { weekday: 'long' })}</span></div>
+      <div class="day-b">${list.map(e => `<button class="ev" data-a="open-ev" data-id="${esc(e.id)}" data-cal="${esc(e.calId)}"><span class="et"><span class="dot" style="background:${esc(e.couleur)}"></span>${e.debut ? e.debut + (e.fin ? '–' + e.fin : '') : 'Journée'}</span><span class="en">${esc(e.titre)}</span></button>`).join('')}</div>
+      <button class="add-day" data-a="new-ev" data-date="${d}">+ Ajouter</button></section>`; }).join('')}</div>`;
+}
+
+/* ---------- Vue : Réglages ---------- */
+function vueReglages() {
+  const st = S.settings, wc = writeCal();
+  const compte = !CID() ? `<p class="muted">Google n'est pas encore configuré. Les données restent dans ce navigateur.</p>`
+    : `${G.user ? `<div class="acct"><span class="avatar">${G.user.photo ? `<img src="${esc(G.user.photo)}" alt="" referrerpolicy="no-referrer">` : esc((G.user.nom || '?')[0])}</span><div class="grow"><b>${esc(G.user.nom)}</b><div class="muted" style="font-size:.88rem">${esc(G.user.email)}</div></div></div>` : ''}
+      <p class="muted" style="font-size:.9rem">Les données sont enregistrées dans le Google Drive de ce compte, dans un dossier caché réservé à Cap Réseau. Il n'apparaît pas dans Drive et ne pèse que quelques kilo-octets.</p>
+      <div class="head-actions">${G.needAuth || !getTok() ? `<button class="btn primary" data-a="signin">Se reconnecter</button>` : `<button class="btn" data-a="sync-now">${ic('refresh')}Enregistrer maintenant</button>`}<button class="btn danger" data-a="arm" data-then="signout">${ic('out')}Se déconnecter</button></div>
+      <p class="faint" style="font-size:.84rem">La déconnexion efface la copie sur cet appareil. Les données restent dans Google Drive.</p>`;
+  const agendas = !G.cals.length ? `<p class="muted" style="font-size:.92rem">${CID() ? 'Les agendas apparaîtront après la connexion à Google.' : 'Disponible après la mise en ligne.'}</p>`
+    : `<label class="field"><span>Agenda où ajouter les nouveaux rendez-vous</span><select id="set-write">${G.cals.filter(c => c.canEdit).map(c => `<option value="${esc(c.id)}" ${wc && wc.id === c.id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select></label>
+      <div class="list">${G.cals.map(c => `<div class="row"><span class="dot" style="background:${esc(c.couleur)};width:12px;height:12px"></span><div class="grow"><div class="t">${esc(c.nom)}</div><div class="s">${c.primary ? 'Agenda principal' : c.canEdit ? 'Modifiable' : 'Lecture seule'}</div></div>
+        <button class="switch" role="switch" aria-checked="${calVisible(c)}" aria-label="Afficher ${esc(c.nom)}" data-a="cal-vis" data-id="${esc(c.id)}"></button></div>`).join('')}</div>`;
+  return `<div class="head"><div><h1>Réglages</h1></div></div>
+  <div class="grid2"><div class="col">
+    <section class="panel"><div class="panel-h"><h2>Profil</h2></div>
+      <form class="form" id="f-profil">
+        <label class="field"><span>Prénom</span><input id="p-prenom" name="prenom" value="${esc(st.prenom)}" placeholder="Pour l'accueil"></label>
+        <label class="field"><span>Secteur</span><input id="p-secteur" name="secteur" value="${esc(st.secteur)}" placeholder="Ex. Bretagne Sud"></label>
+        <label class="field"><span>Objectif de nominations sur l'année</span><input id="p-obj" name="objNomination" type="number" min="0" value="${esc(st.objNomination)}"></label>
+        <div class="field" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div>
+      </form></section>
+    <section class="panel"><div class="panel-h"><h2>Google Agenda</h2></div>${agendas}</section>
+  </div><div class="col">
+    <section class="panel"><div class="panel-h"><h2>Compte Google</h2></div><div class="box" style="border:0;padding:0">${compte}</div></section>
+    <section class="panel"><div class="panel-h"><h2>Sauvegarde de secours</h2></div>
+      <p class="muted" style="font-size:.92rem;margin-bottom:12px">En plus de Google Drive, il est possible de copier toutes les données et de les coller dans une note ou un e-mail.</p>
+      <div class="head-actions"><button class="btn" data-a="backup">Copier la sauvegarde</button><button class="btn" data-a="restore">Restaurer…</button></div>
+      <textarea id="backup-out" style="display:none;margin-top:10px;width:100%;min-height:90px;font-size:.78rem;padding:8px;border:1px solid var(--line);border-radius:8px;background:var(--surface)" readonly aria-label="Sauvegarde"></textarea></section>
+    <section class="panel"><div class="panel-h"><h2>Données</h2></div>
+      <div class="head-actions"><button class="btn danger" data-a="arm" data-then="wipe">Tout effacer</button></div>
+      <p class="faint" style="font-size:.85rem;margin-top:10px">Efface candidats, agents et chiffres, ici et dans Google Drive. Les rendez-vous de Google Agenda ne sont pas touchés. Un deuxième clic confirme.</p></section>
+  </div></div>`;
+}
+/* ---------- Panneau coulissant ---------- */
+let drawerCtx = null;
+function openDrawer(title, body, foot, ctx) {
+  drawerCtx = ctx || null;
+  $('#drawer-title').textContent = title; $('#drawer-b').innerHTML = body; $('#drawer-f').innerHTML = foot || '';
+  $('#drawer').classList.add('on'); $('#scrim').classList.add('on'); $('#drawer').setAttribute('aria-hidden', 'false');
+  $('#drawer-b').scrollTop = 0;
+  setTimeout(() => { const f = $('#drawer-b input:not([type=hidden]),#drawer-b select'); if (f && !ctx?.noFocus && matchMedia('(min-width:861px)').matches) f.focus(); }, 60);
+}
+function closeDrawer() { $('#drawer').classList.remove('on'); $('#scrim').classList.remove('on'); $('#drawer').setAttribute('aria-hidden', 'true'); drawerCtx = null; }
+const opt = (list, v) => list.map(x => `<option ${x === v ? 'selected' : ''}>${esc(x)}</option>`).join('');
+const fld = (label, html, full) => `<label class="field ${full ? 'full' : ''}"><span>${label}</span>${html}</label>`;
+const inp = (id, v, type = 'text', extra = '') => `<input id="${id}" name="${id}" type="${type}" value="${esc(v ?? '')}" ${extra}>`;
+
+/* Candidat */
+function openCandidat(id) {
+  const c = id ? S.candidats.find(x => x.id === id) : { id: null, prenom: '', nom: '', tel: '', email: '', ville: '', profil: PROFILS[0], source: SOURCES[0], projet: PROJETS[3], etape: 'repere', chaleur: 2, next: { texte: '', date: addDays(today(), 2) }, notes: '', journal: [] };
+  if (!c) return;
+  const evs = c.id ? evLies('c', c.id) : [];
+  const idx = ETAPES.findIndex(e => e.id === c.etape);
+  const body = `
+  ${c.id && c.agentId ? `<div class="banner" style="background:var(--good-soft)">${ic('star')}<div class="grow">Nommé agent. <button class="btn sm" data-a="open-a" data-id="${c.agentId}">Voir la fiche agent</button></div></div>` : ''}
+  <form class="form" id="f-cand">
+    ${fld('Prénom', inp('c-prenom', c.prenom, 'text', 'required autocomplete="off"'))}${fld('Nom', inp('c-nom', c.nom, 'text', 'autocomplete="off"'))}
+    ${fld('Téléphone', inp('c-tel', c.tel, 'tel'))}${fld('E-mail', inp('c-email', c.email, 'email'))}
+    ${fld('Ville', inp('c-ville', c.ville))}${fld('Profil actuel', `<select id="c-profil">${opt(PROFILS, c.profil)}</select>`)}
+    ${fld('Origine', `<select id="c-source">${opt(SOURCES, c.source)}</select>`)}${fld('Projet', `<select id="c-projet">${opt(PROJETS, c.projet)}</select>`)}
+    ${fld('Étape', `<select id="c-etape">${[...ETAPES, { id: 'abandon', nom: 'Abandon' }].map(e => `<option value="${e.id}" ${e.id === c.etape ? 'selected' : ''}>${e.nom}</option>`).join('')}</select>`)}
+    <div class="field"><span>Intérêt</span><div class="seg" role="group" aria-label="Intérêt" id="c-heat">${[1, 2, 3].map(v => `<button type="button" data-a="pick-heat" data-v="${v}" aria-pressed="${c.chaleur === v}">${CHALEUR[v]}</button>`).join('')}</div></div>
+    ${fld('Prochaine action', inp('c-next', c.next?.texte, 'text', 'placeholder="Ex. Envoyer la présentation du métier"'), true)}
+    ${fld('Pour le', inp('c-nextd', c.next?.date, 'date'))}<div></div>
+    ${fld('Notes', `<textarea id="c-notes" rows="3" placeholder="Parcours, motivations, apport, contraintes…">${esc(c.notes)}</textarea>`, true)}
+  </form>
+  ${c.id ? `
+  <div class="box"><div class="section-t"><h3>Rendez-vous</h3><button class="btn sm" data-a="new-ev" data-lien="c:${c.id}">${ic('plus')}Planifier un entretien</button></div>
+    ${evs.length ? `<div class="list">${evs.map(e => `<div class="row link" data-a="open-ev" data-id="${e.id}" data-cal="${esc(e.calId)}"><span class="time">${fmtD(e.date, { day: 'numeric', month: 'short' })}</span><div class="grow"><div class="t">${esc(e.titre)}</div><div class="s">${e.debut || ''}${e.lieu ? ' · ' + esc(e.lieu) : ''}</div></div>${e.date < today() ? '<span class="chip">passé</span>' : '<span class="chip accent">à venir</span>'}</div>`).join('')}</div>` : '<p class="faint" style="font-size:.9rem">Aucun rendez-vous planifié.</p>'}</div>
+  <div class="box"><h3>Historique des échanges</h3>
+    <div class="inline"><input id="c-jtxt" placeholder="Ajouter un compte rendu d'échange…"><button class="btn" data-a="add-j" data-id="${c.id}">Ajouter</button></div>
+    <div class="journal">${(c.journal || []).map(j => `<div class="jline"><time>${fmtD(j.date, { day: 'numeric', month: 'short', year: '2-digit' })}</time><div>${esc(j.texte)}</div></div>`).join('') || '<p class="faint" style="font-size:.9rem">Rien pour l\'instant.</p>'}</div></div>` : ''}`;
+  const foot = `${c.id ? `<button class="btn danger" data-a="arm" data-then="del-c" data-id="${c.id}">Supprimer</button>` : ''}<span class="sp"></span>
+    ${c.id && idx >= 0 && idx < ETAPES.length - 1 ? `<button class="btn" data-a="next-stage" data-id="${c.id}">Passer à « ${ETAPES[idx + 1].nom} »</button>` : ''}
+    <button class="btn primary" data-a="save-c" data-id="${c.id || ''}">Enregistrer</button>`;
+  openDrawer(c.id ? fullName(c) : 'Nouveau candidat', body, foot, { type: 'c', id: c.id, heat: c.chaleur });
+}
+function readCandidat(c) {
+  c.prenom = $('#c-prenom').value.trim(); c.nom = $('#c-nom').value.trim(); c.tel = $('#c-tel').value.trim(); c.email = $('#c-email').value.trim();
+  c.ville = $('#c-ville').value.trim(); c.profil = $('#c-profil').value; c.source = $('#c-source').value; c.projet = $('#c-projet').value;
+  c.chaleur = drawerCtx.heat; c.next = { texte: $('#c-next').value.trim(), date: $('#c-nextd').value }; c.notes = $('#c-notes').value;
+  return $('#c-etape').value;
+}
+function setEtape(c, etape) {
+  if (c.etape === etape) return;
+  c.journal = c.journal || []; c.journal.unshift({ date: today(), texte: `Étape : ${ETAPE_NOM[etape]}` });
+  c.etape = etape;
+  if (etape === 'nomme' && !c.agentId) {
+    const a = { id: uid(), prenom: c.prenom, nom: c.nom, agence: c.ville ? 'Agence de ' + c.ville : '', ville: c.ville, tel: c.tel, email: c.email, dateNomination: today(), obj: { e: 0, p: 0 }, realise: {}, formations: [], visites: [], notes: c.notes, candidatId: c.id };
+    S.agents.push(a); c.agentId = a.id; c.next = { texte: '', date: '' };
+    toast(`${fullName(c)} rejoint vos agents`);
+  }
+  if (etape === 'abandon') c.next = { texte: '', date: '' };
+}
+
+/* Agent */
+function openAgent(id, tab) {
+  const isNew = !id; const a = id ? S.agents.find(x => x.id === id) : { id: null, prenom: '', nom: '', agence: '', ville: '', tel: '', email: '', dateNomination: today(), obj: { e: 0, p: 0 }, realise: {}, formations: [], visites: [], notes: '' };
+  if (!a) return;
+  if (tab) UI.agentTab = tab; if (isNew) UI.agentTab = 'fiche';
+  const tabs = isNew ? '' : `<div class="seg" role="tablist">${[['fiche', 'Fiche'], ['chiffres', 'Chiffres'], ['visites', 'Visites'], ['formation', 'Formation DDA']].map(([v, l]) => `<button data-a="atab" data-v="${v}" data-id="${a.id}" aria-pressed="${UI.agentTab === v}">${l}</button>`).join('')}</div>`;
+  let body = tabs, foot = '';
+  const y = UI.annee;
+  if (UI.agentTab === 'fiche' || isNew) {
+    body += `<form class="form" id="f-agent">
+      ${fld('Prénom', inp('a-prenom', a.prenom, 'text', 'required'))}${fld('Nom', inp('a-nom', a.nom))}
+      ${fld('Agence', inp('a-agence', a.agence))}${fld('Ville', inp('a-ville', a.ville))}
+      ${fld('Téléphone', inp('a-tel', a.tel, 'tel'))}${fld('E-mail', inp('a-email', a.email, 'email'))}
+      ${fld('Date de nomination', inp('a-nomi', a.dateNomination, 'date'))}<div></div>
+      ${fld(`Objectif épargne & retraite ${new Date().getFullYear()} (€)`, inp('a-oe', a.obj?.e || '', 'number', 'min="0" step="1000" placeholder="Ex. 1200000"'))}
+      ${fld(`Objectif prévoyance ${new Date().getFullYear()} (€ de primes)`, inp('a-op', a.obj?.p || '', 'number', 'min="0" step="500" placeholder="Ex. 45000"'))}
+      ${fld('Notes', `<textarea id="a-notes" rows="4" placeholder="Profil, points forts, axes de progrès…">${esc(a.notes)}</textarea>`, true)}
+    </form>`;
+    foot = `${a.id ? `<button class="btn danger" data-a="arm" data-then="del-a" data-id="${a.id}">Supprimer</button>` : ''}<span class="sp"></span><button class="btn primary" data-a="save-a" data-id="${a.id || ''}">Enregistrer</button>`;
+  } else if (UI.agentTab === 'chiffres') {
+    let te = 0, tp = 0, tc = 0;
+    const rows = MOIS_L.map((m, i) => { const key = `${y}-${pad(i + 1)}`, v = a.realise?.[key] || {}; te += +v.e || 0; tp += +v.p || 0; tc += +v.c || 0;
+      return `<tr><td>${m}</td>${['e', 'p', 'c'].map(k => `<td><input id="m-${key}-${k}" data-a-month="${key}" data-k="${k}" type="number" min="0" inputmode="numeric" value="${v[k] || ''}" aria-label="${m} ${METRIQUES[k].nom}"></td>`).join('')}</tr>`; }).join('');
+    body += `<p class="muted" style="font-size:.9rem">Saisie mensuelle ${y}. Les montants s'enregistrent automatiquement.</p>
+      <div class="tbl-wrap"><table class="months"><thead><tr><th>Mois</th><th class="r">Épargne (€)</th><th class="r">Prévoyance (€)</th><th class="r">Contrats</th></tr></thead><tbody>${rows}</tbody>
+      <tfoot><tr><td>Total</td><td class="r" id="tot-e">${eur(te)}</td><td class="r" id="tot-p">${eur(tp)}</td><td class="r" id="tot-c">${nf.format(tc)}</td></tr></tfoot></table></div>
+      <div class="box">${progBar('Épargne & retraite', te, a.obj?.e, prorata(a, y), eurC)}${progBar('Prévoyance', tp, a.obj?.p, prorata(a, y), eurC)}</div>`;
+  } else if (UI.agentTab === 'visites') {
+    body += `<form class="box" id="f-visite"><h3>Nouveau compte rendu</h3><div class="form">
+      ${fld('Date', inp('v-date', today(), 'date'))}${fld('Type', `<select id="v-type">${opt(TYPES_VISITE, TYPES_VISITE[0])}</select>`)}
+      ${fld('Objet', inp('v-objet', '', 'text', 'placeholder="Ex. Revue du trimestre"'), true)}
+      ${fld('Constats', `<textarea id="v-constats" rows="3" placeholder="Ce qui va, ce qui coince…"></textarea>`, true)}
+      ${fld('Engagements pris', `<textarea id="v-eng" rows="2" placeholder="Ex. Relancer 10 clients pour un bilan retraite"></textarea>`, true)}
+      <label class="field"><span>Suivi des engagements le</span><input id="v-suivi" type="date" value="${addDays(today(), 14)}"></label>
+      <div class="field" style="justify-content:flex-end"><button class="btn primary" data-a="add-visite" data-id="${a.id}" type="button">Enregistrer le compte rendu</button></div></div>
+      <p class="faint" style="font-size:.84rem">Les engagements créent une tâche de suivi à la date choisie.</p></form>
+      <div class="box"><h3>Historique</h3>${(a.visites || []).slice().sort((x, z) => z.date.localeCompare(x.date)).map(v => `<div class="visit"><div class="section-t"><b>${esc(v.objet || v.type)}</b><span class="chip">${fmtD(v.date, { day: 'numeric', month: 'short', year: 'numeric' })}</span></div>
+        <dl><dt>Type</dt><dd>${esc(v.type)}</dd>${v.constats ? `<dt>Constats</dt><dd>${esc(v.constats)}</dd>` : ''}${v.engagements ? `<dt>Engagements</dt><dd>${esc(v.engagements)}</dd>` : ''}</dl></div>`).join('') || '<p class="faint" style="font-size:.9rem">Aucune visite enregistrée.</p>'}</div>`;
+  } else if (UI.agentTab === 'formation') {
+    const h = ddaHeures(a, new Date().getFullYear());
+    body += `<div class="box"><div class="prog"><div class="prog-top"><span><b>${nf.format(h)} h</b> sur ${DDA_HEURES} h en ${new Date().getFullYear()}</span><span class="chip ${h >= DDA_HEURES ? 'good' : 'warn'}">${h >= DDA_HEURES ? 'Obligation remplie' : `Reste ${nf.format(DDA_HEURES - h)} h`}</span></div>
+      <div class="prog-track"><div class="prog-fill ${h >= DDA_HEURES ? '' : 'warn'}" style="width:${Math.min(100, h / DDA_HEURES * 100)}%"></div></div></div>
+      <p class="faint" style="font-size:.84rem">La directive sur la distribution d'assurances impose au moins 15 heures de formation par an.</p></div>
+      <form class="box" id="f-form"><h3>Ajouter une formation</h3><div class="form">
+        ${fld('Date', inp('f-date', today(), 'date'))}${fld('Heures', inp('f-h', '', 'number', 'min="0.5" step="0.5" placeholder="Ex. 3,5"'))}
+        ${fld('Intitulé', inp('f-int', '', 'text', 'placeholder="Ex. Classe virtuelle épargne retraite"'), true)}
+        <div></div><div class="field" style="justify-content:flex-end"><button class="btn primary" type="button" data-a="add-form" data-id="${a.id}">Ajouter</button></div></div></form>
+      <div class="box"><h3>Formations suivies</h3><div class="list">${(a.formations || []).slice().sort((x, z) => z.date.localeCompare(x.date)).map(f => `<div class="row"><span class="time">${fmtD(f.date, { day: 'numeric', month: 'short', year: '2-digit' })}</span><div class="grow">${esc(f.intitule)}</div><b class="num">${nf.format(f.heures)} h</b><button class="iconbtn" data-a="del-form" data-id="${a.id}" data-f="${f.id}" aria-label="Retirer">×</button></div>`).join('') || '<p class="faint" style="font-size:.9rem">Aucune formation saisie.</p>'}</div></div>`;
+  }
+  openDrawer(isNew ? 'Nouvel agent' : fullName(a), body, foot, { type: 'a', id: a.id, noFocus: !isNew && UI.agentTab !== 'fiche' });
+}
+
+/* Rendez-vous (Google Agenda) */
+function openEvent(id, calId, preset = {}) {
+  if (!CID()) { toast('Disponible après la mise en ligne avec Google'); return; }
+  if (!G.cals.length) { toast(getTok() ? 'Agenda Google en cours de chargement…' : 'Se reconnecter à Google pour gérer les rendez-vous'); return; }
+  const ex = id ? G.events.find(x => x.id === id && x.calId === calId) : null;
+  if (id && !ex) return;
+  if (ex && (!ex.canEdit || (ex.allDay && ex.dateFin > addDays(ex.date, 1)))) {
+    openDrawer(ex.titre, `<div class="box"><span class="chip"><span class="dot" style="background:${esc(ex.couleur)}"></span>${esc(ex.calNom)}</span>
+      <p style="text-transform:capitalize"><b>${fmtLong(ex.date)}</b></p><p>${ex.debut ? ex.debut + (ex.fin ? ' – ' + ex.fin : '') : 'Toute la journée'}</p>${ex.lieu ? `<p class="muted">${esc(ex.lieu)}</p>` : ''}</div>
+      <p class="note">${ex.canEdit ? 'Événement sur plusieurs jours : il se modifie dans Google Agenda.' : 'Cet agenda est en lecture seule.'}</p>`,
+      ex.link ? `<span class="sp"></span><a class="btn" href="${esc(ex.link)}" target="_blank" rel="noopener">${ic('ext')}Ouvrir dans Google Agenda</a>` : '', { noFocus: true });
+    return;
+  }
+  const e = ex || { id: null, titre: '', date: preset.date || today(), debut: '10:00', fin: '11:00', lieu: '', type: preset.type || 'entretien', lien: preset.lien || null };
+  if (!ex && e.lien) { const p = e.lien.t === 'c' ? S.candidats.find(x => x.id === e.lien.id) : S.agents.find(x => x.id === e.lien.id); if (p) { e.titre = (e.lien.t === 'c' ? 'Entretien — ' : 'Visite agence — ') + fullName(p); e.lieu = p.ville || ''; if (e.lien.t === 'a') e.type = 'visite'; } }
+  const lienV = e.lien ? `${e.lien.t}:${e.lien.id}` : '', wc = writeCal();
+  const body = `<form class="form" id="f-ev">
+    ${fld('Titre', inp('e-titre', e.titre, 'text', 'required placeholder="Ex. Entretien — Julien Morvan"'), true)}
+    ${fld('Date', inp('e-date', e.date, 'date'))}${fld('Type', `<select id="e-type">${Object.entries(TYPES_EV).map(([k, v]) => `<option value="${k}" ${k === (e.type || 'autre') ? 'selected' : ''}>${v}</option>`).join('')}</select>`)}
+    ${fld('Début', inp('e-debut', e.debut, 'time'))}${fld('Fin', inp('e-fin', e.fin, 'time'))}
+    ${fld('Lieu', inp('e-lieu', e.lieu), true)}
+    ${fld('Lié à', `<select id="e-lien"><option value="">Personne</option>
+      <optgroup label="Candidats">${S.candidats.filter(c => c.etape !== 'abandon').map(c => `<option value="c:${c.id}" ${lienV === 'c:' + c.id ? 'selected' : ''}>${esc(fullName(c))}</option>`).join('')}</optgroup>
+      <optgroup label="Agents">${S.agents.map(a => `<option value="a:${a.id}" ${lienV === 'a:' + a.id ? 'selected' : ''}>${esc(fullName(a))}</option>`).join('')}</optgroup></select>`, true)}
+    ${ex ? `<div class="field full"><span>Agenda</span><span class="chip" style="align-self:flex-start"><span class="dot" style="background:${esc(ex.couleur)}"></span>${esc(ex.calNom)}</span></div>`
+      : fld('Ajouter dans l\'agenda', `<select id="e-cal">${G.cals.filter(c => c.canEdit).map(c => `<option value="${esc(c.id)}" ${wc && wc.id === c.id ? 'selected' : ''}>${esc(c.nom)}</option>`).join('')}</select>`, true)}
+  </form>
+  <p class="faint" style="font-size:.84rem">Laisser l'heure de début vide pour un événement sur toute la journée.</p>`;
+  const foot = `${ex ? `<button class="btn danger" data-a="arm" data-then="del-ev" data-id="${esc(ex.id)}" data-cal="${esc(ex.calId)}">Supprimer</button>` : ''}<span class="sp"></span>
+    ${ex?.link ? `<a class="btn ghost" href="${esc(ex.link)}" target="_blank" rel="noopener" aria-label="Ouvrir dans Google Agenda">${ic('ext')}</a>` : ''}<button class="btn primary" data-a="save-ev">Enregistrer</button>`;
+  openDrawer(ex ? 'Rendez-vous' : 'Nouveau rendez-vous', body, foot, { type: 'ev', id: ex?.id || null, calId: ex?.calId || null });
+}
+/* Tâche */
+function openTache() {
+  openDrawer('Nouvelle tâche', `<form class="form" id="f-t">${fld('Tâche', inp('t-titre', '', 'text', 'required placeholder="Ex. Préparer la réunion d\'équipe"'), true)}${fld('Pour le', inp('t-date', addDays(today(), 1), 'date'))}
+    ${fld('Liée à', `<select id="t-lien"><option value="">Personne</option><optgroup label="Agents">${S.agents.map(a => `<option value="a:${a.id}">${esc(fullName(a))}</option>`).join('')}</optgroup><optgroup label="Candidats">${enCours().map(c => `<option value="c:${c.id}">${esc(fullName(c))}</option>`).join('')}</optgroup></select>`)}</form>`,
+    `<span class="sp"></span><button class="btn primary" data-a="save-t">Ajouter</button>`, { type: 't' });
+}
+
+/* ---------- Actions ---------- */
+function toast(m) { const t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2600); }
+
+const A = {
+  go: el => { closeDrawer(); go(el.dataset.v); },
+  close: () => closeDrawer(),
+  'new-c': () => openCandidat(null),
+  'open-c': el => openCandidat(el.dataset.id),
+  'new-a': () => openAgent(null),
+  'open-a': el => openAgent(el.dataset.id, el.dataset.tab || 'fiche'),
+  'new-ev': el => { const l = el.dataset.lien?.split(':'); openEvent(null, 'app', { date: el.dataset.date, lien: l ? { t: l[0], id: l[1] } : null }); },
+  'open-ev': el => openEvent(el.dataset.id, el.dataset.cal),
+  'new-t': () => openTache(),
+  'pick-heat': el => { drawerCtx.heat = +el.dataset.v; $$('#c-heat button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === el.dataset.v)); },
+  signin: () => signIn(false),
+  'sync-now': () => { if (!getTok()) { needAuth(); return; } drivePush(); },
+  refresh: async el => { if (!getTok()) { needAuth(); return; } el.disabled = true;
+    try { await loadCalendars(); G.span = null; await ensureRange(addDays(UI.weekStart, -7), addDays(UI.weekStart, 21)); toast('Agenda à jour'); } catch (e) { toast('Actualisation impossible'); }
+    render(); },
+  heat: el => { UI.heat = +el.dataset.v; $$('.toolbar .seg button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.v === UI.heat)); renderBoard(); },
+  'toggle-ab': () => { UI.showAb = !UI.showAb; render(); },
+  metric: el => { UI.metric = el.dataset.v; render(); },
+  week: el => { const n = +el.dataset.v; UI.weekStart = n === 0 ? weekStart(today()) : addDays(UI.weekStart, n); render(); },
+  'cal-vis': el => { const c = G.cals.find(x => x.id === el.dataset.id); if (!c) return; S.gcal.vis[c.id] = !calVisible(c); save(); render(); },
+  atab: el => { UI.agentTab = el.dataset.v; openAgent(el.dataset.id); },
+
+  'save-c': el => {
+    if (!$('#c-prenom').value.trim()) { $('#c-prenom').focus(); toast('Le prénom est nécessaire'); return; }
+    let c = el.dataset.id ? S.candidats.find(x => x.id === el.dataset.id) : null;
+    const isNew = !c; if (isNew) { c = { id: uid(), journal: [], createdAt: today(), etape: 'repere' }; S.candidats.push(c); }
+    const et = readCandidat(c); if (isNew) { c.etape = et; c.journal.push({ date: today(), texte: 'Fiche créée' }); if (et === 'nomme') { c.etape = 'dossier'; setEtape(c, 'nomme'); } } else setEtape(c, et);
+    save(); closeDrawer(); render(); if (isNew) toast('Candidat ajouté');
+  },
+  'next-stage': el => { const c = S.candidats.find(x => x.id === el.dataset.id); const et = readCandidat(c); setEtape(c, et);
+    const i = ETAPES.findIndex(e => e.id === c.etape); if (i >= 0 && i < ETAPES.length - 1) setEtape(c, ETAPES[i + 1].id); save(); render(); openCandidat(c.id); },
+  'add-j': el => { const v = $('#c-jtxt').value.trim(); if (!v) return; const c = S.candidats.find(x => x.id === el.dataset.id);
+    readCandidat(c); c.journal.unshift({ date: today(), texte: v }); save(); openCandidat(c.id); render(); },
+  'done-c': el => { const c = S.candidats.find(x => x.id === el.dataset.id); c.journal = c.journal || [];
+    c.journal.unshift({ date: today(), texte: 'Fait : ' + c.next.texte }); c.next = { texte: '', date: addDays(today(), 3) }; save(); render(); openCandidat(c.id);
+    toast('Fait. Prochaine action à planifier'); setTimeout(() => $('#c-next')?.focus(), 120); },
+  'done-t': el => { const t = S.taches.find(x => x.id === el.dataset.id); t.fait = true; save(); render(); toast('Tâche terminée'); },
+  'save-t': () => { const ti = $('#t-titre').value.trim(); if (!ti) { $('#t-titre').focus(); return; } const l = $('#t-lien').value.split(':');
+    S.taches.push({ id: uid(), titre: ti, date: $('#t-date').value, fait: false, lien: l[1] ? { t: l[0], id: l[1] } : null }); save(); closeDrawer(); render(); toast('Tâche ajoutée'); },
+
+  'save-a': el => {
+    if (!$('#a-prenom').value.trim()) { $('#a-prenom').focus(); toast('Le prénom est nécessaire'); return; }
+    let a = el.dataset.id ? S.agents.find(x => x.id === el.dataset.id) : null; const isNew = !a;
+    if (isNew) { a = { id: uid(), realise: {}, formations: [], visites: [] }; S.agents.push(a); }
+    Object.assign(a, { prenom: $('#a-prenom').value.trim(), nom: $('#a-nom').value.trim(), agence: $('#a-agence').value.trim(), ville: $('#a-ville').value.trim(), tel: $('#a-tel').value.trim(), email: $('#a-email').value.trim(),
+      dateNomination: $('#a-nomi').value, obj: { e: +$('#a-oe').value || 0, p: +$('#a-op').value || 0 }, notes: $('#a-notes').value });
+    save(); render(); toast(isNew ? 'Agent ajouté' : 'Fiche enregistrée'); if (isNew) closeDrawer(); else openAgent(a.id);
+  },
+  'add-visite': el => { const a = S.agents.find(x => x.id === el.dataset.id);
+    const v = { id: uid(), date: $('#v-date').value || today(), type: $('#v-type').value, objet: $('#v-objet').value.trim(), constats: $('#v-constats').value.trim(), engagements: $('#v-eng').value.trim() };
+    if (!v.objet && !v.constats && !v.engagements) { $('#v-objet').focus(); toast('Le compte rendu est vide'); return; }
+    a.visites = a.visites || []; a.visites.push(v);
+    if (v.engagements) S.taches.push({ id: uid(), titre: `Suivi des engagements : ${v.engagements.slice(0, 80)}`, date: $('#v-suivi').value, fait: false, lien: { t: 'a', id: a.id } });
+    save(); openAgent(a.id); render(); toast(v.engagements ? 'Compte rendu enregistré, suivi planifié' : 'Compte rendu enregistré'); },
+  'add-form': el => { const a = S.agents.find(x => x.id === el.dataset.id); const h = parseFloat(String($('#f-h').value).replace(',', '.'));
+    if (!h) { $('#f-h').focus(); toast('Indiquer le nombre d\'heures'); return; }
+    a.formations = a.formations || []; a.formations.push({ id: uid(), date: $('#f-date').value || today(), intitule: $('#f-int').value.trim() || 'Formation', heures: h }); save(); openAgent(a.id); render(); toast('Formation ajoutée'); },
+  'del-form': el => { const a = S.agents.find(x => x.id === el.dataset.id); a.formations = a.formations.filter(f => f.id !== el.dataset.f); save(); openAgent(a.id); render(); },
+
+  'save-ev': async el => {
+    const ti = $('#e-titre').value.trim(); if (!ti) { $('#e-titre').focus(); toast('Le titre est nécessaire'); return; }
+    const l = $('#e-lien').value.split(':'), ctx = drawerCtx;
+    const data = { titre: ti, date: $('#e-date').value || today(), debut: $('#e-debut').value, fin: $('#e-fin').value, lieu: $('#e-lieu').value.trim(), type: $('#e-type').value, lien: l[1] ? { t: l[0], id: l[1] } : null };
+    if ($('#e-cal') && $('#e-cal').value !== S.gcal.write) { S.gcal.write = $('#e-cal').value; save(); }
+    el.disabled = true; el.textContent = 'Envoi à Google…';
+    try { await gSaveEvent(data, ctx.id, ctx.calId); closeDrawer(); render(); toast(ctx.id ? 'Rendez-vous modifié dans Google Agenda' : 'Rendez-vous ajouté dans Google Agenda'); }
+    catch (err) { el.disabled = false; el.textContent = 'Enregistrer';
+      toast(err.message === 'offline' ? 'Pas de réseau : rendez-vous non enregistré' : (err.message === 'noauth' || err.message === '401') ? 'Reconnexion Google nécessaire' : 'Google a refusé l\'enregistrement'); }
+  },
+  backup: async () => { const txt = JSON.stringify(S); const ta = $('#backup-out'); ta.style.display = 'block'; ta.value = txt;
+    try { await navigator.clipboard.writeText(txt); toast('Sauvegarde copiée'); } catch (e) { ta.select(); toast('Sélectionnée : copier avec Cmd+C'); } },
+  restore: () => openDrawer('Restaurer une sauvegarde', `<p class="muted">Coller ici le texte d'une sauvegarde copiée depuis Cap Réseau. Les données actuelles seront remplacées.</p>
+    <label class="field"><span>Sauvegarde</span><textarea id="r-txt" rows="8"></textarea></label>`, `<span class="sp"></span><button class="btn primary" data-a="do-restore">Restaurer</button>`, { type: 'r' }),
+  'do-restore': () => { try { const d = JSON.parse($('#r-txt').value); if (!d || !Array.isArray(d.candidats)) throw 0; S = normalize(d); save(); closeDrawer(); render(); toast('Sauvegarde restaurée'); } catch (e) { toast('Ce texte n\'est pas une sauvegarde valide'); } },
+
+  /* Actions à double clic de confirmation */
+  arm: el => {
+    if (!el.classList.contains('armed')) { el.classList.add('armed'); el.dataset.label = el.textContent; el.textContent = 'Confirmer ?'; setTimeout(() => { if (el.isConnected) { el.classList.remove('armed'); el.textContent = el.dataset.label; } }, 3500); return; }
+    const id = el.dataset.id;
+    ({
+      wipe: () => { S = blank(); save(); render(); toast('Toutes les données ont été effacées'); },
+      'del-c': () => { S.candidats = S.candidats.filter(c => c.id !== id); save(); closeDrawer(); render(); toast('Candidat supprimé'); },
+      'del-a': () => { S.agents = S.agents.filter(a => a.id !== id); S.candidats.forEach(c => { if (c.agentId === id) delete c.agentId; }); save(); closeDrawer(); render(); toast('Agent supprimé'); },
+      'del-ev': async () => { try { await gDeleteEvent(id, el.dataset.cal); closeDrawer(); render(); toast('Rendez-vous supprimé de Google Agenda'); } catch (e) { toast('Suppression impossible pour le moment'); } },
+      signout: () => signOut()
+    })[el.dataset.then]?.();
+  }
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]'); if (!el) return;
+  if (el.tagName === 'BUTTON' && el.type === 'submit' && el.closest('form')) return;
+  const f = A[el.dataset.a]; if (!f) return;
+  e.preventDefault(); e.stopPropagation(); f(el, e);
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#drawer').classList.contains('on')) closeDrawer(); });
+document.addEventListener('submit', e => {
+  e.preventDefault();
+  if (e.target.id === 'f-profil') { S.settings.prenom = $('#p-prenom').value.trim(); S.settings.secteur = $('#p-secteur').value.trim(); S.settings.objNomination = +$('#p-obj').value || 0; save(); render(); toast('Profil enregistré'); }
+  else if (e.target.id === 'f-cand') $('[data-a="save-c"]')?.click();
+  else if (e.target.id === 'f-agent') $('[data-a="save-a"]')?.click();
+  else if (e.target.id === 'f-ev') $('[data-a="save-ev"]')?.click();
+  else if (e.target.id === 'f-t') $('[data-a="save-t"]')?.click();
+});
+document.addEventListener('input', e => {
+  if (e.target.id === 'q-cand') { UI.q = e.target.value; renderBoard(); }
+});
+document.addEventListener('change', e => {
+  if (e.target.id === 'set-write') { S.gcal.write = e.target.value; save(); toast('Agenda par défaut enregistré'); return; }
+  if (e.target.id === 'sel-annee') { UI.annee = +e.target.value; render(); return; }
+  const key = e.target.dataset.aMonth;
+  if (key && drawerCtx?.type === 'a') {
+    const a = S.agents.find(x => x.id === drawerCtx.id); a.realise = a.realise || {}; a.realise[key] = a.realise[key] || {};
+    a.realise[key][e.target.dataset.k] = Math.max(0, +e.target.value || 0); save();
+    const y = UI.annee; $('#tot-e').textContent = eur(realiseAnnee(a, y, 'e')); $('#tot-p').textContent = eur(realiseAnnee(a, y, 'p')); $('#tot-c').textContent = nf.format(realiseAnnee(a, y, 'c'));
+    render();
+  }
+});
+
+/* Glisser-déposer des cartes de recrutement (ordinateur) */
+let dragId = null;
+document.addEventListener('dragstart', e => { const c = e.target.closest?.('.kcard'); if (!c) return; dragId = c.dataset.id; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', dragId); } catch (_) { } });
+document.addEventListener('dragend', e => { e.target.closest?.('.kcard')?.classList.remove('dragging'); $$('.kcol.over').forEach(x => x.classList.remove('over')); });
+document.addEventListener('dragover', e => { const col = e.target.closest?.('.kcol'); if (!col || !dragId) return; e.preventDefault(); $$('.kcol.over').forEach(x => x !== col && x.classList.remove('over')); col.classList.add('over'); });
+document.addEventListener('drop', e => { const col = e.target.closest?.('.kcol'); if (!col || !dragId) return; e.preventDefault();
+  const c = S.candidats.find(x => x.id === dragId); dragId = null; if (!c) return;
+  setEtape(c, col.dataset.col); save(); render(); });
+
+/* ---------- Démarrage ---------- */
+async function boot() {
+  handleHash();
+  if (!CID()) { showApp(); return; }
+  if (!getTok()) {
+    if (G.user && navigator.onLine && !ss.get('cr_silent_done')) { ss.set('cr_silent_done', '1'); signIn(true); return; }
+    if (!G.user) { showGate(); return; }
+    G.needAuth = true; showApp(); return;
+  }
+  ss.del('cr_silent_done'); G.needAuth = false;
+  showApp();
+  try {
+    await loadUser(); await driveLoad(); await loadCalendars(); G.span = null;
+    await ensureRange(addDays(weekStart(today()), -7), addDays(weekStart(today()), 21));
+  } catch (e) { }
+  if (!drawerCtx) render(); else renderSync();
+}
+/* Retour sur l'appli (autre appareil entre-temps) : on recharge Drive et l'agenda */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { if (isDirty() && getTok()) { clearTimeout(pushTimer); drivePush(true); } return; }
+  if (!CID() || $('#app').hidden) return;
+  if (!getTok()) { needAuth(); return; }
+  (async () => { try { if (!isDirty()) await driveLoad(); G.span = null; await ensureRange(addDays(weekStart(today()), -7), addDays(weekStart(today()), 21)); } catch (e) { } if (!drawerCtx) render(); })();
+});
+addEventListener('online', () => { G.offline = false; renderSync(); if (isDirty()) drivePush(); });
+addEventListener('offline', () => { G.offline = true; renderSync(); });
+boot();
+
+</script>
+</body>
+</html>
