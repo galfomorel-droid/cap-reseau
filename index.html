@@ -566,6 +566,93 @@ function renderSync() {
   for (const el of $$('.sync')) { el.className = 'sync ' + cls; el.querySelector('span:last-child').textContent = txt; el.title = txt; }
 }
 
+/* ---------- Bilan mensuel pour le manager ---------- */
+const ORDRE = ['repere', 'contact', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6', 'e7', 'nomme'];
+const NOM_ORDRE = { repere: 'Repérés', contact: 'Premier contact', e1: '1. Premier entretien (individuel ou collectif)', e2: '2. Entretien de synthèse', e3: '3. Questionnaire confidentiel', e4: '4. Mandat, rémunération et restitution BP', e5: '5. Entretien additionnel', e6: '6. Entretien 6 références', e7: '7. Bilan et décision finale', nomme: 'Nommés agents' };
+const rang = id => ORDRE.indexOf(id === 'e1c' ? 'e1' : id);
+function bilanData(key) {
+  const [y, mo] = key.split('-').map(Number), inM = d => !!d && d.slice(0, 7) === key, t = today();
+  const nomVersId = Object.fromEntries(Object.entries(ETAPE_NOM).map(([id, n]) => [n, id]));
+  const etapesJ = c => (c.journal || []).filter(j => /^Étape : /.test(j.texte)).map(j => ({ id: nomVersId[j.texte.slice(8)], date: j.date })).filter(x => x.id);
+  const atteint = c => Math.max(rang(c.etape), ...etapesJ(c).map(x => rang(x.id)), 0);
+  const C = S.candidats;
+  const nomMois = S.agents.filter(a => inM(a.dateNomination)).length, nomAn = S.agents.filter(a => (a.dateNomination || '').startsWith(y + '-')).length;
+  const etapes = ORDRE.map((id, i) => {
+    const ici = C.filter(c => rang(c.etape) === i).length;
+    const arrives = i === 0 ? C.filter(c => inM(c.createdAt)).length : C.filter(c => etapesJ(c).some(x => rang(x.id) === i && inM(x.date))).length;
+    const ont = C.filter(c => atteint(c) >= i).length, suiv = C.filter(c => atteint(c) >= i + 1).length;
+    return { nom: NOM_ORDRE[id], ici, arrives, passage: i < ORDRE.length - 1 && ont ? suiv / ont : null };
+  });
+  const parSource = {}; for (const c of C) { const k = c.source || 'Non renseignée'; const o = parSource[k] = parSource[k] || { nom: k, total: 0, mois: 0, nommes: 0 }; o.total++; if (inM(c.createdAt)) o.mois++; if (c.etape === 'nomme') o.nommes++; }
+  const parCoop = {}; for (const c of C) if (c.coopte) { const o = parCoop[c.coopte] = parCoop[c.coopte] || { nom: c.coopte, total: 0, nommes: 0 }; o.total++; if (c.etape === 'nomme') o.nommes++; }
+  const delais = C.filter(c => c.agentId && c.createdAt).map(c => { const a = S.agents.find(x => x.id === c.agentId); return a?.dateNomination ? daysBetween(c.createdAt, a.dateNomination) : null; }).filter(x => x != null && x >= 0);
+  const avances = C.filter(c => c.etape !== 'nomme' && c.etape !== 'abandon').sort((a, b) => rang(b.etape) - rang(a.etape) || b.chaleur - a.chaleur).slice(0, 10);
+  return {
+    key, titre: MOIS_L[mo - 1] + ' ' + y, y,
+    nouveaux: C.filter(c => inM(c.createdAt)).length,
+    entretiens: S.events.filter(e => e.type === 'entretien' && inM(e.date) && e.date <= t).length,
+    mails: C.reduce((n, c) => n + (c.journal || []).filter(j => j.ech === 'envoye' && inM(j.date)).length, 0),
+    abandons: C.filter(c => (c.journal || []).some(j => j.texte === 'Étape : Abandon' && inM(j.date))).length,
+    enCours: enCours().length, nomMois, nomAn, obj: +S.settings.objNomination || 0,
+    etapes, sources: Object.values(parSource).sort((a, b) => b.total - a.total), coop: Object.values(parCoop).sort((a, b) => b.total - a.total),
+    delai: delais.length ? Math.round(delais.reduce((a, b) => a + b, 0) / delais.length) : null, nbDelais: delais.length, avances,
+    agents: S.agents.map(a => ({ nom: fullName(a), agence: a.agence || '', e: realiseAnnee(a, y, 'e'), oe: +a.obj?.e || 0, p: realiseAnnee(a, y, 'p'), op: +a.obj?.p || 0, dda: ddaHeures(a, y), visites: (a.visites || []).filter(v => inM(v.date)).length }))
+  };
+}
+function bilanHtml(d) {
+  const sig = (S.settings.signature || '').split('\n')[0] || S.settings.prenom || '';
+  const P = v => v == null ? '—' : pct(v), kpi = (v, l, s) => `<div class="rk"><b>${v}</b><span>${l}</span>${s ? `<i>${s}</i>` : ''}</div>`;
+  const tbl = (h, rows) => `<table><thead><tr>${h.map((x, i) => `<th${i ? ' class="r"' : ''}>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map((x, i) => `<td${i ? ' class="r"' : ''}>${x}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  return `<div class="rp">
+  <div class="rp-h"><div><div class="rp-k">Bilan recrutement</div><h1>${esc(d.titre)}</h1>${sig || S.settings.secteur ? `<div class="rp-s">${esc([sig, S.settings.secteur].filter(Boolean).join(' · '))}</div>` : ''}</div><div class="rp-s">Édité le ${fmtD(today(), { day: 'numeric', month: 'long', year: 'numeric' })}</div></div>
+  <div class="rks">${kpi(d.nouveaux, 'nouveaux candidats')}${kpi(d.entretiens, 'entretiens menés')}${kpi(d.nomMois, 'nominations du mois')}${kpi(d.nomAn + (d.obj ? ' / ' + d.obj : ''), 'nominations ' + d.y, d.obj ? P(d.nomAn / d.obj) + ' de l\'objectif' : '')}</div>
+  <p class="rp-l">${d.enCours} candidat${d.enCours > 1 ? 's' : ''} en cours · ${d.mails} mail${d.mails > 1 ? 's' : ''} envoyé${d.mails > 1 ? 's' : ''} depuis l'outil · ${d.abandons} abandon${d.abandons > 1 ? 's' : ''} ce mois · délai moyen jusqu'à la nomination : <b>${d.delai == null ? 'pas encore de nomination' : d.delai + ' jours'}</b>${d.nbDelais ? ` (sur ${d.nbDelais} nomination${d.nbDelais > 1 ? 's' : ''})` : ''}</p>
+  <div class="blk"><h2>Le recrutement étape par étape</h2>${tbl(['Étape', 'Candidats aujourd\'hui', 'Arrivés ce mois', 'Passage à l\'étape suivante'], d.etapes.map(e => [esc(e.nom), e.ici, e.arrives, e.passage == null ? '—' : P(e.passage)]))}
+    <p class="rp-n">« Passage à l'étape suivante » : part des candidats arrivés à cette étape qui sont allés plus loin, depuis le début.</p></div>
+  <div class="blk"><h2>Origine des candidats</h2>${d.sources.length ? tbl(['Origine', 'Candidats', 'Dont ce mois', 'Nommés', 'Taux de nomination'], d.sources.map(o => [esc(o.nom), o.total, o.mois, o.nommes, P(o.total ? o.nommes / o.total : null)])) : '<p class="rp-n">Aucun candidat pour le moment.</p>'}</div>
+  ${d.coop.length ? `<div class="blk"><h2>Cooptation</h2>${tbl(['Recommandé par', 'Candidats', 'Nommés'], d.coop.map(o => [esc(o.nom), o.total, o.nommes]))}</div>` : ''}
+  <div class="blk"><h2>Candidats les plus avancés</h2>${d.avances.length ? tbl(['Candidat', 'Étape', 'Suivi', 'Prochaine action'], d.avances.map(c => [`<b>${esc(fullName(c))}</b>${c.profil ? `<br><small>${esc(c.profil)}</small>` : ''}`, esc(ETAPE_NOM[c.etape] || ''), ECH[c.ech]?.nom || '—', c.next?.texte ? esc(c.next.texte) + (c.next.date ? ` <small>(${fmtD(c.next.date, { day: 'numeric', month: 'short' })})</small>` : '') : '—'])) : '<p class="rp-n">Aucun candidat en cours.</p>'}</div>
+  ${d.agents.length ? `<div class="blk"><h2>Activité des agents (${d.y})</h2>${tbl(['Agent', 'Épargne & retraite', 'Prévoyance', 'Formation DDA', 'Visites du mois'], d.agents.map(a => [`<b>${esc(a.nom)}</b>${a.agence ? `<br><small>${esc(a.agence)}</small>` : ''}`, eurC(a.e) + (a.oe ? ` <small>/ ${eurC(a.oe)} (${P(a.e / a.oe)})</small>` : ''), eurC(a.p) + (a.op ? ` <small>/ ${eurC(a.op)} (${P(a.p / a.op)})</small>` : ''), nf.format(a.dda) + ' h / ' + DDA_HEURES + ' h', a.visites]))}</div>` : ''}
+  <div class="rp-f">Cap Réseau · bilan généré automatiquement à partir des données saisies</div></div>`;
+}
+const RP_CSS = `.rp{font-family:"Source Sans 3","Segoe UI",Arial,sans-serif;color:#13202B;background:#fff;font-size:12.5px;line-height:1.45;padding:4px}
+.rp h1{font-family:"Sora","Segoe UI",Arial,sans-serif;font-size:24px;margin:2px 0 4px;color:#13202B}.rp h2{font-family:"Sora","Segoe UI",Arial,sans-serif;font-size:14px;margin:0 0 8px;color:#0A6B66}
+.rp-h{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:2px solid #0A6B66;padding-bottom:10px;margin-bottom:14px;flex-wrap:wrap}
+.rp-k{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:#0A6B66;font-weight:700}.rp-s{color:#475663;font-size:11.5px}
+.rks{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.rk{border:1px solid #D9E0E6;border-radius:8px;padding:9px 10px;display:flex;flex-direction:column}
+.rk b{font-family:"Sora","Segoe UI",Arial,sans-serif;font-size:20px;color:#13202B}.rk span{color:#475663;font-size:11px}.rk i{font-style:normal;color:#0A6B66;font-size:11px;font-weight:600}
+.rp-l{background:#EEF4F3;border-radius:8px;padding:8px 10px;margin:0 0 14px;color:#13202B}.blk{margin-bottom:16px;page-break-inside:avoid;break-inside:avoid}
+.rp table{width:100%;border-collapse:collapse}.rp th{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#77858F;text-align:left;padding:5px 6px;border-bottom:1px solid #D9E0E6}
+.rp td{padding:5px 6px;border-bottom:1px solid #EBEFF3;vertical-align:top;color:#13202B}.rp .r{text-align:right}.rp small{color:#77858F}.rp-n{color:#77858F;font-size:11px;margin:6px 0 0}
+.rp-f{border-top:1px solid #D9E0E6;padding-top:8px;color:#77858F;font-size:10.5px;text-align:center}`;
+function moisListe() { const out = [], d = new Date(); d.setDate(1); for (let i = 0; i < 12; i++) { out.push(`${d.getFullYear()}-${pad(d.getMonth() + 1)}`); d.setMonth(d.getMonth() - 1); } return out; }
+function openBilan(key) {
+  key = key || UI.bilanMois || moisListe()[0]; UI.bilanMois = key;
+  const body = `<div class="toolbar"><label class="field" style="flex-direction:row;align-items:center;gap:8px"><span>Mois</span><select id="b-mois">${moisListe().map(k => `<option value="${k}" ${k === key ? 'selected' : ''}>${MOIS_L[+k.slice(5) - 1]} ${k.slice(0, 4)}</option>`).join('')}</select></label></div>
+    <div style="background:#fff;border-radius:10px;padding:14px;border:1px solid var(--line);overflow-x:auto"><style>${RP_CSS}</style>${bilanHtml(bilanData(key))}</div>`;
+  openDrawer('Bilan mensuel', body, `<span class="sp"></span><button class="btn primary" data-a="bilan-pdf">${ic('upload')}Télécharger le PDF</button>`, { type: 'bilan', noFocus: true });
+}
+function loadHtml2pdf() {
+  if (window.html2pdf) return Promise.resolve();
+  return new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js'; sc.onload = ok; sc.onerror = ko; document.head.appendChild(sc); });
+}
+async function bilanPdf(btn) {
+  const d = bilanData(UI.bilanMois || moisListe()[0]), html = `<style>${RP_CSS}</style>${bilanHtml(d)}`, nom = `Bilan recrutement ${d.titre}.pdf`;
+  btn.disabled = true; btn.textContent = 'Préparation du PDF…';
+  try {
+    await loadHtml2pdf();
+    const box = document.createElement('div'); box.style.cssText = 'position:fixed;left:-10000px;top:0;width:760px;background:#fff'; box.innerHTML = html; document.body.appendChild(box);
+    await window.html2pdf().set({ margin: [10, 10, 12, 10], filename: nom, image: { type: 'jpeg', quality: 0.95 }, html2canvas: { scale: 2, backgroundColor: '#ffffff' }, jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }, pagebreak: { mode: ['css', 'legacy'], avoid: ['.blk', 'tr'] } }).from(box.firstElementChild.nextElementSibling).save();
+    box.remove(); toast('PDF téléchargé');
+  } catch (e) {
+    /* Repli : impression du navigateur, puis « Enregistrer au format PDF » */
+    const w = window.open('', '_blank');
+    if (w) { w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>${esc(nom)}</title><style>@page{size:A4;margin:12mm}body{margin:0}</style></head><body>${html}<script>setTimeout(()=>print(),300)<\/script></body></html>`); w.document.close(); toast('Choisir « Enregistrer au format PDF »'); }
+    else toast('Téléchargement impossible : autoriser les fenêtres pour ce site');
+  }
+  btn.disabled = false; btn.innerHTML = `${ic('upload')}Télécharger le PDF`;
+}
+
 /* ---------- Modèles de mails ---------- */
 function remplir(t, c) {
   const ev = evLies('c', c.id).find(e => e.date >= today());
@@ -786,7 +873,7 @@ function vueJour() {
   const hello = S.settings.prenom ? `Bonjour ${esc(S.settings.prenom)}` : 'Bonjour';
   return `
   <div class="head"><div><h1>${hello}</h1><p class="sub" style="text-transform:capitalize">${fmtLong(t)}${S.settings.secteur ? ' · ' + esc(S.settings.secteur) : ''}</p></div>
-    <div class="head-actions"><button class="btn" data-a="new-ev">${ic('plus')}<span class="lg">Rendez-vous</span></button><button class="btn primary" data-a="new-c">${ic('plus')}Candidat</button></div></div>
+    <div class="head-actions"><button class="btn" data-a="new-ev">${ic('plus')}<span class="lg">Rendez-vous</span></button><button class="btn" data-a="bilan">${ic('chiffres')}<span class="lg">Bilan du mois</span></button><button class="btn primary" data-a="new-c">${ic('plus')}Candidat</button></div></div>
   ${demarrage()}
   <div class="stats">
     <div class="stat"><span class="label">Candidats en cours</span><span class="v">${ec.length}</span><span class="d">${chauds} chaud${chauds > 1 ? 's' : ''}</span></div>
@@ -839,7 +926,7 @@ function vueRecrut() {
 }
 function renderBoard() {
   const q = UI.q.trim().toLowerCase();
-  const match = c => (!UI.heat || c.chaleur === UI.heat) && (!UI.ech || c.ech === UI.ech) && (!q || [c.prenom, c.nom, c.ville, c.profil, c.source].join(' ').toLowerCase().includes(q));
+  const match = c => (!UI.heat || c.chaleur === UI.heat) && (!UI.ech || c.ech === UI.ech) && (!q || [c.prenom, c.nom, c.ville, c.profil, c.source, c.coopte].join(' ').toLowerCase().includes(q));
   const cols = [...ETAPES, ...(UI.showAb ? [{ id: 'abandon', nom: 'Abandons' }] : [])];
   const lst = id => S.candidats.filter(c => c.etape === id && match(c)).sort((a, b) => b.chaleur - a.chaleur || (a.next?.date || '9').localeCompare(b.next?.date || '9'));
   const vide = '<p class="faint" style="font-size:.84rem;padding:4px">Aucun candidat</p>';
@@ -860,7 +947,7 @@ function card(c) {
   return `<button class="kcard" draggable="true" data-a="open-c" data-id="${c.id}">
     <span class="n"><span class="heat h${c.chaleur}" title="${CHALEUR[c.chaleur]}"><i></i><i></i><i></i></span>${esc(fullName(c))}</span>
     <span class="p">${esc(c.profil || '')}${c.ville ? ' · ' + esc(c.ville) : ''}</span>
-    <span class="tags">${ECH[c.ech] ? `<span class="chip ${ECH[c.ech].cls}">${ECH[c.ech].nom}</span>` : ''}${c.source ? `<span class="chip">${esc(c.source)}</span>` : ''}${c.cv ? '<span class="chip">CV</span>' : ''}</span>${n}</button>`;
+    <span class="tags">${ECH[c.ech] ? `<span class="chip ${ECH[c.ech].cls}">${ECH[c.ech].nom}</span>` : ''}${c.coopte ? `<span class="chip accent">Coopté · ${esc(c.coopte)}</span>` : c.source ? `<span class="chip">${esc(c.source)}</span>` : ''}${c.cv ? '<span class="chip">CV</span>' : ''}</span>${n}</button>`;
 }
 
 /* ---------- Vue : Agents ---------- */
@@ -892,7 +979,7 @@ function vueChiffres() {
   const y = UI.annee, k = UI.metric, M = METRIQUES[k];
   const years = new Set([new Date().getFullYear()]); S.agents.forEach(a => Object.keys(a.realise || {}).forEach(m => years.add(+m.slice(0, 4))));
   const head = `<div class="head"><div><h1>Chiffres du réseau</h1><p class="sub">Saisie mois par mois dans la fiche de chaque agent.</p></div>
-    <div class="head-actions"><label class="field" style="flex-direction:row;align-items:center;gap:8px"><span>Année</span><select id="sel-annee">${[...years].sort().map(v => `<option ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div></div>`;
+    <div class="head-actions"><button class="btn primary" data-a="bilan">${ic('chiffres')}Bilan mensuel (PDF)</button><label class="field" style="flex-direction:row;align-items:center;gap:8px"><span>Année</span><select id="sel-annee">${[...years].sort().map(v => `<option ${v === y ? 'selected' : ''}>${v}</option>`).join('')}</select></label></div></div>`;
   if (!S.agents.length) return head + `<div class="panel empty big"><h2>Les chiffres apparaîtront avec les premiers agents</h2><p>Collecte épargne et retraite, prévoyance en affaires nouvelles, nombre de contrats : tout se consolide ici, agent par agent et mois par mois.</p></div>`;
   const tot = S.agents.reduce((s, a) => s + realiseAnnee(a, y, k), 0);
   const obj = k === 'c' ? 0 : S.agents.reduce((s, a) => s + (+a.obj?.[k] || 0), 0);
@@ -1029,6 +1116,7 @@ function openCandidat(id) {
     ${fld('Téléphone', inp('c-tel', c.tel, 'tel'))}${fld('E-mail', inp('c-email', c.email, 'email'))}
     ${fld('Ville', inp('c-ville', c.ville))}${fld('Profession actuelle', inp('c-profil', c.profil, 'text', 'placeholder="Ex. Directeur d\'agence bancaire"'))}
     ${fld('Origine', `<select id="c-source">${opt(SOURCES, c.source)}</select>`)}
+    ${fld('Recommandé par (cooptation)', `<input id="c-coop" list="dl-coop" value="${esc(c.coopte || '')}" placeholder="Nom de l'agent ou de la personne" autocomplete="off"><datalist id="dl-coop">${[...new Set([...S.agents.map(fullName), ...S.candidats.map(x => x.coopte).filter(Boolean)])].map(n => `<option value="${esc(n)}">`).join('')}</datalist>`)}
     ${fld('Étape', `<select id="c-etape">${[...ETAPES, { id: 'abandon', nom: 'Abandon' }].map(e => `<option value="${e.id}" ${e.id === c.etape ? 'selected' : ''}>${e.nom}</option>`).join('')}</select>`)}
     <div class="field"><span>Intérêt</span><div class="seg" role="group" aria-label="Intérêt" id="c-heat">${[1, 2, 3].map(v => `<button type="button" data-a="pick-heat" data-v="${v}" aria-pressed="${c.chaleur === v}">${CHALEUR[v]}</button>`).join('')}</div></div>
     <div class="field full"><span>Suivi des échanges</span><div class="seg" role="group" aria-label="Suivi des échanges" id="c-ech"><button type="button" data-a="pick-ech" data-v="" aria-pressed="${!c.ech}">Aucun</button>${Object.entries(ECH).map(([k, v]) => `<button type="button" data-a="pick-ech" data-v="${k}" aria-pressed="${c.ech === k}"><span class="dot" style="background:${v.coul}"></span>${v.nom}</button>`).join('')}</div></div>
@@ -1055,6 +1143,10 @@ function openCandidat(id) {
 function readCandidat(c) {
   c.prenom = $('#c-prenom').value.trim(); c.nom = $('#c-nom').value.trim(); c.tel = $('#c-tel').value.trim(); c.email = $('#c-email').value.trim();
   c.ville = $('#c-ville').value.trim(); c.profil = $('#c-profil').value; c.source = $('#c-source').value;
+  const coop = $('#c-coop').value.trim();
+  if (coop && coop !== (c.coopte || '')) { c.source = 'Cooptation';
+    S.taches.push({ id: uid(), titre: `Remercier ${coop} pour la recommandation de ${[c.prenom, c.nom].filter(Boolean).join(' ') || 'ce candidat'}`, date: addDays(today(), 1), fait: false, lien: { t: 'c', id: c.id } }); }
+  c.coopte = coop;
   if ((c.ech || '') !== drawerCtx.ech) { c.journal = c.journal || []; c.journal.unshift({ date: today(), texte: 'Échange : ' + (ECH[drawerCtx.ech]?.nom || 'statut retiré'), ech: drawerCtx.ech }); }
   c.ech = drawerCtx.ech; c.chaleur = drawerCtx.heat; c.next = { texte: $('#c-next').value.trim(), date: $('#c-nextd').value }; c.notes = $('#c-notes').value;
   return $('#c-etape').value;
@@ -1066,6 +1158,7 @@ function setEtape(c, etape) {
   if (etape === 'nomme' && !c.agentId) {
     const a = { id: uid(), prenom: c.prenom, nom: c.nom, agence: c.ville ? 'Agence de ' + c.ville : '', ville: c.ville, tel: c.tel, email: c.email, dateNomination: today(), obj: { e: 0, p: 0 }, realise: {}, formations: [], visites: [], notes: c.notes, candidatId: c.id };
     S.agents.push(a); c.agentId = a.id; c.next = { texte: '', date: '' };
+    if (c.coopte) S.taches.push({ id: uid(), titre: `Annoncer à ${c.coopte} la nomination de ${fullName(c)} et le remercier`, date: today(), fait: false, lien: { t: 'a', id: a.id } });
     toast(`${fullName(c)} rejoint vos agents`);
   }
   if (etape === 'abandon') c.next = { texte: '', date: '' };
@@ -1175,6 +1268,8 @@ const A = {
   'toggle-ab': () => { UI.showAb = !UI.showAb; render(); },
   metric: el => { UI.metric = el.dataset.v; render(); },
   week: el => { const n = +el.dataset.v; UI.weekStart = n === 0 ? weekStart(today()) : addDays(UI.weekStart, n); render(); },
+  bilan: () => openBilan(),
+  'bilan-pdf': el => bilanPdf(el),
   mail: el => openMail(el.dataset.id, el.dataset.m),
   'mail-copy': async () => { const t = `Objet : ${$('#m-sujet').value}\n\n${$('#m-corps').value}`;
     try { await navigator.clipboard.writeText(t); toast('Texte copié'); } catch (e) { $('#m-corps').select(); toast('Texte sélectionné : copier avec Ctrl+C'); } },
@@ -1298,6 +1393,7 @@ document.addEventListener('input', e => {
   if (e.target.id === 'q-cand') { UI.q = e.target.value; renderBoard(); }
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'b-mois') { openBilan(e.target.value); return; }
   if (e.target.id === 'sel-annee') { UI.annee = +e.target.value; render(); return; }
   if (e.target.dataset.par && drawerCtx?.type === 'c') { const c = S.candidats.find(x => x.id === drawerCtx.id); if (c) { c.parallele = c.parallele || {}; c.parallele[e.target.dataset.par] = e.target.checked; save(); } return; }
   const key = e.target.dataset.aMonth;
