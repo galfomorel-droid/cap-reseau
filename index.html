@@ -20,7 +20,7 @@
   --bg:#F3F5F7; --surface:#FFFFFF; --surface-2:#EBEFF3; --line:#D9E0E6;
   --ink:#13202B; --ink-2:#475663; --ink-3:#77858F;
   --accent:#0A6B66; --accent-ink:#FFFFFF; --accent-soft:#DCEFED;
-  --warn:#A55F00; --warn-soft:#FAEED8; --bad:#B0362E; --bad-soft:#F7E0DD; --good:#2B7A4B; --good-soft:#DEF0E4;
+  --warn:#A55F00; --warn-soft:#FAEED8; --bad:#B0362E; --bad-soft:#F7E0DD; --good:#2B7A4B; --good-soft:#DEF0E4; --info:#2F5FB3; --info-soft:#E1EAF8;
   --bar:#0A6B66; --bar-hi:#0D8C85; --track:#E3E8ED;
   --shadow:0 1px 2px rgba(19,32,43,.06),0 8px 24px rgba(19,32,43,.08);
   --f-display:"Sora","Avenir Next","Segoe UI",system-ui,sans-serif;
@@ -32,7 +32,7 @@
   --bg:#0D141A; --surface:#141D25; --surface-2:#1B2630; --line:#283743;
   --ink:#E4ECF1; --ink-2:#A7B5C0; --ink-3:#7C8C98;
   --accent:#3DB5AB; --accent-ink:#04201D; --accent-soft:#12332F;
-  --warn:#E3A341; --warn-soft:#382912; --bad:#EE7B71; --bad-soft:#3B1C19; --good:#5EC38B; --good-soft:#142E1F;
+  --warn:#E3A341; --warn-soft:#382912; --bad:#EE7B71; --bad-soft:#3B1C19; --good:#5EC38B; --good-soft:#142E1F; --info:#86A9EE; --info-soft:#17253D;
   --bar:#3DB5AB; --bar-hi:#6FD3C9; --track:#22303B;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
   color-scheme:dark}}
@@ -40,7 +40,7 @@
   --bg:#0D141A; --surface:#141D25; --surface-2:#1B2630; --line:#283743;
   --ink:#E4ECF1; --ink-2:#A7B5C0; --ink-3:#7C8C98;
   --accent:#3DB5AB; --accent-ink:#04201D; --accent-soft:#12332F;
-  --warn:#E3A341; --warn-soft:#382912; --bad:#EE7B71; --bad-soft:#3B1C19; --good:#5EC38B; --good-soft:#142E1F;
+  --warn:#E3A341; --warn-soft:#382912; --bad:#EE7B71; --bad-soft:#3B1C19; --good:#5EC38B; --good-soft:#142E1F; --info:#86A9EE; --info-soft:#17253D;
   --bar:#3DB5AB; --bar-hi:#6FD3C9; --track:#22303B;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.35);
   color-scheme:dark}
@@ -125,6 +125,8 @@ svg.i{width:19px;height:19px;flex:none;stroke:currentColor;fill:none;stroke-widt
 .chip.good{background:var(--good-soft);color:var(--good)}
 .chip.warn{background:var(--warn-soft);color:var(--warn)}
 .chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.info{background:var(--info-soft);color:var(--info)}
+.seg button .dot{margin-right:5px;vertical-align:1px}
 .chip.accent{background:var(--accent-soft);color:var(--accent)}
 .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}
 
@@ -366,6 +368,7 @@ tfoot td{font-weight:700;border-bottom:0}
   <div class="drawer-f" id="drawer-f"></div>
 </aside>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="cv-file" accept=".pdf,.doc,.docx,.odt,image/*,application/pdf" hidden>
 
 <script>
 /* =========================================================
@@ -441,6 +444,7 @@ const ETAPES = [
   { id: 'repere', nom: 'Repérés' },
   { id: 'contact', nom: 'Premier contact' },
   { id: 'e1', nom: '1. Premier entretien individuel', aide: 'Présenter et partager le questionnaire confidentiel. Présenter l\'ensemble du process de recrutement, pour plus de transparence (au plus tard en fin de premier entretien ou de synthèse).' },
+  { id: 'e1c', nom: '1. Réunion collective', aide: 'Présenter et partager le questionnaire confidentiel. Présenter l\'ensemble du process de recrutement, pour plus de transparence (au plus tard en fin de premier entretien ou de synthèse).' },
   { id: 'e2', nom: '2. Entretien de synthèse', aide: 'Même objectif de transparence : le process complet doit être présenté au plus tard à cette étape.' },
   { id: 'e3', nom: '3. Questionnaire confidentiel', aide: 'Commencer la grille d\'évaluation. Présenter les grandes lignes du show de la rémunération et remettre le show pour l\'esquisse de Business Plan du 4e entretien (BP IR et BP IS, collectives incluses). Mapping réseau.' },
   { id: 'e4', nom: '4. Mandat, rémunération et restitution BP', aide: 'Laisser le candidat présenter son esquisse de Business Plan. Il peut réfléchir à plusieurs scénarios, mais présente un seul BP, réaliste et cohérent avec le mapping réseau.' },
@@ -450,9 +454,12 @@ const ETAPES = [
   { id: 'nomme', nom: 'Nommés agents' }
 ];
 const PARALLELE = [{ id: 'rh', nom: 'Entretien RH avec le CIR régional' }, { id: 'a2p', nom: 'Vis ma vie A2P' }, { id: 'xp', nom: 'Contrôle des expériences professionnelles auprès des précédents employeurs' }];
+/* Étape suivante (premier entretien individuel et réunion collective mènent tous deux à l'entretien de synthèse) */
+const nextEtape = id => { if (id === 'e1' || id === 'e1c') return 'e2'; const i = ETAPES.findIndex(e => e.id === id); return i >= 0 && i < ETAPES.length - 1 ? ETAPES[i + 1].id : null; };
+const ECH = { envoye: { nom: 'Mail envoyé', cls: 'info', coul: 'var(--info)' }, attente: { nom: 'En attente de réponse', cls: 'warn', coul: 'var(--warn)' }, sans: { nom: 'Pas de réponse', cls: 'bad', coul: 'var(--bad)' } };
 const ANCIENNES_ETAPES = { decouverte: 'e1', approfondi: 'e2', dossier: 'e7' };
 const ETAPE_NOM = Object.fromEntries([...ETAPES.map(e => [e.id, e.nom]), ['abandon', 'Abandon']]);
-const PROFILS = ['Directeur d\'agence', 'Indépendant', 'Conseiller patrimonial en banque', 'Conseiller clientèle banque', 'CGP indépendant', 'Agent d\'une autre compagnie', 'Courtier', 'Commercial terrain', 'Commercial en assurance', 'Reconversion', 'Autre'];
+const PROFILS = ['Directeur d\'agence', 'Directeur commercial', 'Indépendant', 'Conseiller patrimonial en banque', 'Conseiller clientèle banque', 'CGP indépendant', 'Agent d\'une autre compagnie', 'Courtier', 'Commercial terrain', 'Commercial en assurance', 'Reconversion', 'Autre'];
 const SOURCES = ['Cooptation', 'LinkedIn', 'Indeed', 'APEC', 'Réseau perso', 'Salon / forum', 'Candidature spontanée', 'Site d\'emploi', 'Autre'];
 const CHALEUR = { 1: 'Froid', 2: 'Tiède', 3: 'Chaud' };
 const TYPES_EV = { entretien: 'Entretien recrutement', visite: 'Visite d\'agence', accompagnement: 'Accompagnement client', reunion: 'Réunion', admin: 'Administratif', autre: 'Autre' };
@@ -473,7 +480,7 @@ function load() { try { const r = ls.get(KEY); return r ? normalize(JSON.parse(r
 let S = load() || blank();
 const G = { user: null, needAuth: false, offline: !navigator.onLine, pushing: false, authMsg: '', authOk: false, gateMode: 'login', lastEmail: '', savedAt: null };
 
-const UI = { view: ss.get('cr_view') || 'jour', q: '', heat: 0, showAb: false, weekStart: weekStart(today()), annee: new Date().getFullYear(), metric: 'e', agentTab: 'fiche' };
+const UI = { view: ss.get('cr_view') || 'jour', q: '', heat: 0, ech: '', showAb: false, weekStart: weekStart(today()), annee: new Date().getFullYear(), metric: 'e', agentTab: 'fiche' };
 
 /* ---------- Comptes (e-mail + mot de passe) ---------- */
 const CLOUD = () => !!SB_KEY;
@@ -553,6 +560,27 @@ function renderSync() {
   else if (isDirty()) { cls = 'warn'; txt = 'Modifications à enregistrer'; }
   for (const el of $$('.sync')) { el.className = 'sync ' + cls; el.querySelector('span:last-child').textContent = txt; el.title = txt; }
 }
+
+/* ---------- CV (stockage de fichiers privé Supabase, un dossier par compte) ---------- */
+let cvTarget = null;
+const CV_MAX = 10 * 1024 * 1024;
+async function cvUpload(c, file) {
+  const ext = (file.name.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5) || 'pdf';
+  const path = `${SES.uid}/${c.id}-${Date.now()}.${ext}`;
+  const at = await token();
+  let r;
+  try { r = await fetch(`${SB_URL}/storage/v1/object/cv/${path}`, { method: 'POST', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + at, 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'true' }, body: file }); }
+  catch (e) { throw new Error('offline'); }
+  if (!r.ok) throw new Error('upload ' + r.status);
+  return path;
+}
+async function cvUrl(path) {
+  const at = await token();
+  const r = await fetch(`${SB_URL}/storage/v1/object/sign/cv/${path}`, { method: 'POST', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + at, 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn: 600 }) });
+  if (!r.ok) throw new Error('sign ' + r.status);
+  const j = await r.json(); return SB_URL + '/storage/v1' + (j.signedURL || j.signedUrl);
+}
+async function cvDelete(path) { try { const at = await token(); await fetch(`${SB_URL}/storage/v1/object/cv/${path}`, { method: 'DELETE', headers: { apikey: SB_KEY, Authorization: 'Bearer ' + at } }); } catch (e) { } }
 
 /* ---------- Agenda de l'outil ---------- */
 const TYPE_COUL = { entretien: '#0A6B66', visite: '#4F5BD5', accompagnement: '#C2410C', reunion: '#0E7490', admin: '#64748B', autre: '#A21CAF' };
@@ -765,7 +793,8 @@ function vueRecrut() {
     <div class="head-actions"><button class="btn primary" data-a="new-c">${ic('plus')}Candidat</button></div></div>
   <div class="toolbar">
     <label class="search">${ic('search')}<input id="q-cand" type="search" placeholder="Nom, ville, profil…" value="${esc(UI.q)}" aria-label="Rechercher un candidat"></label>
-    <div class="seg" role="group" aria-label="Filtrer par intérêt">${[[0, 'Tous'], [3, 'Chauds'], [2, 'Tièdes'], [1, 'Froids']].map(([v, l]) => `<button data-a="heat" data-v="${v}" aria-pressed="${UI.heat === v}">${l}</button>`).join('')}</div>
+    <div class="seg" role="group" aria-label="Filtrer par intérêt" id="f-heat">${[[0, 'Tous'], [3, 'Chauds'], [2, 'Tièdes'], [1, 'Froids']].map(([v, l]) => `<button data-a="heat" data-v="${v}" aria-pressed="${UI.heat === v}">${l}</button>`).join('')}</div>
+    <div class="seg" role="group" aria-label="Filtrer par suivi des échanges" id="f-ech"><button data-a="f-ech" data-v="" aria-pressed="${!UI.ech}">Tous les échanges</button>${Object.entries(ECH).map(([k, v]) => `<button data-a="f-ech" data-v="${k}" aria-pressed="${UI.ech === k}"><span class="dot" style="background:${v.coul}"></span>${v.nom}</button>`).join('')}</div>
     <button class="btn sm ghost" data-a="toggle-ab">${UI.showAb ? 'Masquer' : 'Voir'} les abandons (${ab})</button>
   </div>
   <div class="board-scroll"><div class="board" id="board"></div></div>
@@ -773,7 +802,7 @@ function vueRecrut() {
 }
 function renderBoard() {
   const q = UI.q.trim().toLowerCase();
-  const match = c => (!UI.heat || c.chaleur === UI.heat) && (!q || [c.prenom, c.nom, c.ville, c.profil, c.source].join(' ').toLowerCase().includes(q));
+  const match = c => (!UI.heat || c.chaleur === UI.heat) && (!UI.ech || c.ech === UI.ech) && (!q || [c.prenom, c.nom, c.ville, c.profil, c.source].join(' ').toLowerCase().includes(q));
   const cols = [...ETAPES, ...(UI.showAb ? [{ id: 'abandon', nom: 'Abandons' }] : [])];
   $('#board').innerHTML = cols.map(e => {
     const list = S.candidats.filter(c => c.etape === e.id && match(c)).sort((a, b) => b.chaleur - a.chaleur || (a.next?.date || '9').localeCompare(b.next?.date || '9'));
@@ -786,7 +815,7 @@ function card(c) {
   return `<button class="kcard" draggable="true" data-a="open-c" data-id="${c.id}">
     <span class="n"><span class="heat h${c.chaleur}" title="${CHALEUR[c.chaleur]}"><i></i><i></i><i></i></span>${esc(fullName(c))}</span>
     <span class="p">${esc(c.profil || '')}${c.ville ? ' · ' + esc(c.ville) : ''}</span>
-    ${c.source ? `<span class="tags"><span class="chip">${esc(c.source)}</span></span>` : ''}${n}</button>`;
+    <span class="tags">${ECH[c.ech] ? `<span class="chip ${ECH[c.ech].cls}">${ECH[c.ech].nom}</span>` : ''}${c.source ? `<span class="chip">${esc(c.source)}</span>` : ''}${c.cv ? '<span class="chip">CV</span>' : ''}</span>${n}</button>`;
 }
 
 /* ---------- Vue : Agents ---------- */
@@ -953,6 +982,7 @@ function openCandidat(id) {
     ${fld('Origine', `<select id="c-source">${opt(SOURCES, c.source)}</select>`)}
     ${fld('Étape', `<select id="c-etape">${[...ETAPES, { id: 'abandon', nom: 'Abandon' }].map(e => `<option value="${e.id}" ${e.id === c.etape ? 'selected' : ''}>${e.nom}</option>`).join('')}</select>`)}
     <div class="field"><span>Intérêt</span><div class="seg" role="group" aria-label="Intérêt" id="c-heat">${[1, 2, 3].map(v => `<button type="button" data-a="pick-heat" data-v="${v}" aria-pressed="${c.chaleur === v}">${CHALEUR[v]}</button>`).join('')}</div></div>
+    <div class="field full"><span>Suivi des échanges</span><div class="seg" role="group" aria-label="Suivi des échanges" id="c-ech"><button type="button" data-a="pick-ech" data-v="" aria-pressed="${!c.ech}">Aucun</button>${Object.entries(ECH).map(([k, v]) => `<button type="button" data-a="pick-ech" data-v="${k}" aria-pressed="${c.ech === k}"><span class="dot" style="background:${v.coul}"></span>${v.nom}</button>`).join('')}</div></div>
     ${fld('Prochaine action', inp('c-next', c.next?.texte, 'text', 'placeholder="Ex. Envoyer la présentation du métier"'), true)}
     ${fld('Pour le', inp('c-nextd', c.next?.date, 'date'))}<div></div>
     ${fld('Notes', `<textarea id="c-notes" rows="3" placeholder="Parcours, motivations, apport, contraintes…">${esc(c.notes)}</textarea>`, true)}
@@ -960,18 +990,22 @@ function openCandidat(id) {
   ${c.id ? `${guideEtape(c)}
   <div class="box"><div class="section-t"><h3>Rendez-vous</h3><button class="btn sm" data-a="new-ev" data-lien="c:${c.id}">${ic('plus')}Planifier un entretien</button></div>
     ${evs.length ? `<div class="list">${evs.map(e => `<div class="row link" data-a="open-ev" data-id="${e.id}" data-cal="${esc(e.calId)}"><span class="time">${fmtD(e.date, { day: 'numeric', month: 'short' })}</span><div class="grow"><div class="t">${esc(e.titre)}</div><div class="s">${e.debut || ''}${e.lieu ? ' · ' + esc(e.lieu) : ''}</div></div>${e.date < today() ? '<span class="chip">passé</span>' : '<span class="chip accent">à venir</span>'}</div>`).join('')}</div>` : '<p class="faint" style="font-size:.9rem">Aucun rendez-vous planifié.</p>'}</div>
+  <div class="box"><div class="section-t"><h3>CV</h3>${c.cv ? '' : `<button class="btn sm" data-a="cv-add" data-id="${c.id}">${ic('plus')}Ajouter le CV</button>`}</div>
+    ${c.cv ? `<div class="row" style="padding:0;flex-wrap:wrap"><div class="grow"><div class="t" style="overflow-wrap:anywhere">${esc(c.cv.nom)}</div><div class="s">Ajouté le ${fmtD(c.cv.date, { day: 'numeric', month: 'long', year: 'numeric' })} · ${Math.max(1, Math.round(c.cv.taille / 1024))} Ko</div></div>
+      <button class="btn sm primary" data-a="cv-open" data-id="${c.id}">Voir</button><button class="btn sm" data-a="cv-add" data-id="${c.id}">Remplacer</button><button class="btn sm danger" data-a="arm" data-then="cv-del" data-id="${c.id}">Retirer</button></div>` : '<p class="faint" style="font-size:.9rem">PDF, Word ou photo, 10 Mo maximum.</p>'}</div>
   <div class="box"><h3>Historique des échanges</h3>
     <div class="inline"><input id="c-jtxt" placeholder="Ajouter un compte rendu d'échange…"><button class="btn" data-a="add-j" data-id="${c.id}">Ajouter</button></div>
-    <div class="journal">${(c.journal || []).map(j => `<div class="jline"><time>${fmtD(j.date, { day: 'numeric', month: 'short', year: '2-digit' })}</time><div>${esc(j.texte)}</div></div>`).join('') || '<p class="faint" style="font-size:.9rem">Rien pour l\'instant.</p>'}</div></div>` : ''}`;
+    <div class="journal">${(c.journal || []).map(j => `<div class="jline"><time>${fmtD(j.date, { day: 'numeric', month: 'short', year: '2-digit' })}</time><div>${ECH[j.ech] ? `<span class="chip ${ECH[j.ech].cls}">${ECH[j.ech].nom}</span>` : esc(j.texte)}</div></div>`).join('') || '<p class="faint" style="font-size:.9rem">Rien pour l\'instant.</p>'}</div></div>` : ''}`;
   const foot = `${c.id ? `<button class="btn danger" data-a="arm" data-then="del-c" data-id="${c.id}">Supprimer</button>` : ''}<span class="sp"></span>
-    ${c.id && idx >= 0 && idx < ETAPES.length - 1 ? `<button class="btn" data-a="next-stage" data-id="${c.id}">Passer à « ${ETAPES[idx + 1].nom} »</button>` : ''}
+    ${c.id && idx >= 0 && nextEtape(c.etape) ? `<button class="btn" data-a="next-stage" data-id="${c.id}">Passer à « ${ETAPE_NOM[nextEtape(c.etape)]} »</button>` : ''}
     <button class="btn primary" data-a="save-c" data-id="${c.id || ''}">Enregistrer</button>`;
-  openDrawer(c.id ? fullName(c) : 'Nouveau candidat', body, foot, { type: 'c', id: c.id, heat: c.chaleur });
+  openDrawer(c.id ? fullName(c) : 'Nouveau candidat', body, foot, { type: 'c', id: c.id, heat: c.chaleur, ech: c.ech || '' });
 }
 function readCandidat(c) {
   c.prenom = $('#c-prenom').value.trim(); c.nom = $('#c-nom').value.trim(); c.tel = $('#c-tel').value.trim(); c.email = $('#c-email').value.trim();
   c.ville = $('#c-ville').value.trim(); c.profil = $('#c-profil').value; c.source = $('#c-source').value;
-  c.chaleur = drawerCtx.heat; c.next = { texte: $('#c-next').value.trim(), date: $('#c-nextd').value }; c.notes = $('#c-notes').value;
+  if ((c.ech || '') !== drawerCtx.ech) { c.journal = c.journal || []; c.journal.unshift({ date: today(), texte: 'Échange : ' + (ECH[drawerCtx.ech]?.nom || 'statut retiré'), ech: drawerCtx.ech }); }
+  c.ech = drawerCtx.ech; c.chaleur = drawerCtx.heat; c.next = { texte: $('#c-next').value.trim(), date: $('#c-nextd').value }; c.notes = $('#c-notes').value;
   return $('#c-etape').value;
 }
 function setEtape(c, etape) {
@@ -1082,6 +1116,15 @@ const A = {
   'new-ev': el => { const l = el.dataset.lien?.split(':'); openEvent(null, 'app', { date: el.dataset.date, lien: l ? { t: l[0], id: l[1] } : null }); },
   'open-ev': el => openEvent(el.dataset.id, el.dataset.cal),
   'new-t': () => openTache(),
+  'cv-add': el => { if (!CLOUD() || !SES) { toast('Les CV demandent d\'être connectée'); return; } cvTarget = el.dataset.id; $('#cv-file').click(); },
+  'cv-open': async el => { const c = S.candidats.find(x => x.id === el.dataset.id); if (!c?.cv) return; const w = window.open('', '_blank');
+    try { const u = await cvUrl(c.cv.path); if (w) w.location = u; else location.href = u; } catch (e) { if (w) w.close(); toast('Ouverture du CV impossible pour le moment'); } },
+  heat: el => { UI.heat = +el.dataset.v; $$('#f-heat button').forEach(b => b.setAttribute('aria-pressed', +b.dataset.v === UI.heat)); renderBoard(); },
+  'f-ech': el => { UI.ech = el.dataset.v; $$('#f-ech button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === UI.ech)); renderBoard(); },
+  'toggle-ab': () => { UI.showAb = !UI.showAb; render(); },
+  metric: el => { UI.metric = el.dataset.v; render(); },
+  week: el => { const n = +el.dataset.v; UI.weekStart = n === 0 ? weekStart(today()) : addDays(UI.weekStart, n); render(); },
+  'pick-ech': el => { drawerCtx.ech = el.dataset.v; $$('#c-ech button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === el.dataset.v)); },
   'pick-heat': el => { drawerCtx.heat = +el.dataset.v; $$('#c-heat button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === el.dataset.v)); },
   signin: () => { G.lastEmail = SES?.email || G.lastEmail; G.authMsg = ''; showGate('login'); },
   gate: el => { G.authMsg = ''; showGate(el.dataset.v); },
@@ -1101,7 +1144,7 @@ const A = {
     save(); closeDrawer(); render(); if (isNew) toast('Candidat ajouté');
   },
   'next-stage': el => { const c = S.candidats.find(x => x.id === el.dataset.id); const et = readCandidat(c); setEtape(c, et);
-    const i = ETAPES.findIndex(e => e.id === c.etape); if (i >= 0 && i < ETAPES.length - 1) setEtape(c, ETAPES[i + 1].id); save(); render(); openCandidat(c.id); },
+    const n = nextEtape(c.etape); if (n) setEtape(c, n); save(); render(); openCandidat(c.id); },
   'add-j': el => { const v = $('#c-jtxt').value.trim(); if (!v) return; const c = S.candidats.find(x => x.id === el.dataset.id);
     readCandidat(c); c.journal.unshift({ date: today(), texte: v }); save(); openCandidat(c.id); render(); },
   'done-c': el => { const c = S.candidats.find(x => x.id === el.dataset.id); c.journal = c.journal || [];
@@ -1150,7 +1193,8 @@ const A = {
     const id = el.dataset.id;
     ({
       wipe: () => { S = blank(); save(); render(); toast('Toutes les données ont été effacées'); },
-      'del-c': () => { S.candidats = S.candidats.filter(c => c.id !== id); save(); closeDrawer(); render(); toast('Candidat supprimé'); },
+      'cv-del': () => { const c = S.candidats.find(x => x.id === id); if (!c?.cv) return; cvDelete(c.cv.path); delete c.cv; save(); openCandidat(c.id); render(); toast('CV retiré'); },
+      'del-c': () => { const cc = S.candidats.find(c => c.id === id); if (cc?.cv) cvDelete(cc.cv.path); S.candidats = S.candidats.filter(c => c.id !== id); save(); closeDrawer(); render(); toast('Candidat supprimé'); },
       'del-a': () => { S.agents = S.agents.filter(a => a.id !== id); S.candidats.forEach(c => { if (c.agentId === id) delete c.agentId; }); save(); closeDrawer(); render(); toast('Agent supprimé'); },
       'del-ev': () => { S.events = S.events.filter(e => e.id !== id); save(); closeDrawer(); render(); toast('Rendez-vous supprimé'); },
       signout: () => signOut()
@@ -1198,6 +1242,14 @@ document.addEventListener('dragover', e => { const col = e.target.closest?.('.kc
 document.addEventListener('drop', e => { const col = e.target.closest?.('.kcol'); if (!col || !dragId) return; e.preventDefault();
   const c = S.candidats.find(x => x.id === dragId); dragId = null; if (!c) return;
   setEtape(c, col.dataset.col); save(); render(); });
+
+$('#cv-file').addEventListener('change', async ev => {
+  const f = ev.target.files[0]; ev.target.value = ''; const c = S.candidats.find(x => x.id === cvTarget); if (!f || !c) return;
+  if (f.size > CV_MAX) { toast('Fichier trop lourd (10 Mo maximum)'); return; }
+  toast('Envoi du CV…');
+  try { const old = c.cv?.path; const path = await cvUpload(c, f); c.cv = { path, nom: f.name, taille: f.size, date: today() }; if (old && old !== path) cvDelete(old); save(); if (drawerCtx?.id === c.id) openCandidat(c.id); render(); toast('CV enregistré'); }
+  catch (e) { toast(e.message === 'offline' ? 'Pas de réseau : CV non envoyé' : 'Envoi du CV impossible'); }
+});
 
 /* ---------- Démarrage ---------- */
 async function boot() {
