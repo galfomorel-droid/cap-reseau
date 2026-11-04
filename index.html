@@ -191,6 +191,9 @@ svg.i{width:19px;height:19px;flex:none;stroke:currentColor;fill:none;stroke-widt
 .board-scroll{overflow-x:auto;margin-inline:-4px;padding:2px 4px 10px}
 .board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(232px,1fr);gap:12px;min-height:300px}
 .kcol{background:var(--surface-2);border-radius:var(--r);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.kgroup{gap:10px}
+.ksub{background:var(--surface);border:1px dashed var(--line);padding:8px}
+.ksub h4{margin:0;font-size:.84rem;font-weight:600;color:var(--ink-2)}
 .kcol.over{outline:2px dashed var(--accent);outline-offset:-2px}
 .kcol-h{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 4px}
 .kcol-h span{font-size:.8rem;color:var(--ink-3);font-weight:600}
@@ -443,8 +446,8 @@ const ic = n => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}<
 const ETAPES = [
   { id: 'repere', nom: 'Repérés' },
   { id: 'contact', nom: 'Premier contact' },
-  { id: 'e1', nom: '1. Premier entretien individuel', aide: 'Présenter et partager le questionnaire confidentiel. Présenter l\'ensemble du process de recrutement, pour plus de transparence (au plus tard en fin de premier entretien ou de synthèse).' },
-  { id: 'e1c', nom: '1. Réunion collective', aide: 'Présenter et partager le questionnaire confidentiel. Présenter l\'ensemble du process de recrutement, pour plus de transparence (au plus tard en fin de premier entretien ou de synthèse).' },
+  { id: 'e1', nom: '1. Premier entretien — individuel', aide: 'Présenter et partager le questionnaire confidentiel. Présenter l\'ensemble du process de recrutement, pour plus de transparence (au plus tard en fin de premier entretien ou de synthèse).' },
+  { id: 'e1c', nom: '1. Premier entretien — réunion collective', aide: 'Présenter et partager le questionnaire confidentiel. Présenter l\'ensemble du process de recrutement, pour plus de transparence (au plus tard en fin de premier entretien ou de synthèse).' },
   { id: 'e2', nom: '2. Entretien de synthèse', aide: 'Même objectif de transparence : le process complet doit être présenté au plus tard à cette étape.' },
   { id: 'e3', nom: '3. Questionnaire confidentiel', aide: 'Commencer la grille d\'évaluation. Présenter les grandes lignes du show de la rémunération et remettre le show pour l\'esquisse de Business Plan du 4e entretien (BP IR et BP IS, collectives incluses). Mapping réseau.' },
   { id: 'e4', nom: '4. Mandat, rémunération et restitution BP', aide: 'Laisser le candidat présenter son esquisse de Business Plan. Il peut réfléchir à plusieurs scénarios, mais présente un seul BP, réaliste et cohérent avec le mapping réseau.' },
@@ -803,10 +806,18 @@ function renderBoard() {
   const q = UI.q.trim().toLowerCase();
   const match = c => (!UI.heat || c.chaleur === UI.heat) && (!UI.ech || c.ech === UI.ech) && (!q || [c.prenom, c.nom, c.ville, c.profil, c.source].join(' ').toLowerCase().includes(q));
   const cols = [...ETAPES, ...(UI.showAb ? [{ id: 'abandon', nom: 'Abandons' }] : [])];
-  $('#board').innerHTML = cols.map(e => {
-    const list = S.candidats.filter(c => c.etape === e.id && match(c)).sort((a, b) => b.chaleur - a.chaleur || (a.next?.date || '9').localeCompare(b.next?.date || '9'));
+  const lst = id => S.candidats.filter(c => c.etape === id && match(c)).sort((a, b) => b.chaleur - a.chaleur || (a.next?.date || '9').localeCompare(b.next?.date || '9'));
+  const vide = '<p class="faint" style="font-size:.84rem;padding:4px">Aucun candidat</p>';
+  $('#board').innerHTML = cols.filter(e => e.id !== 'e1c').map(e => {
+    /* Étape 1 : une seule colonne, avec deux sous-cases */
+    if (e.id === 'e1') {
+      const a = lst('e1'), b = lst('e1c');
+      return `<section class="kcol kgroup"><div class="kcol-h"><h3>1. Premier entretien</h3><span>${a.length + b.length}</span></div>
+        ${[['e1', 'Entretien individuel', a], ['e1c', 'Réunion collective', b]].map(([id, nom, l]) => `<div class="kcol ksub" data-col="${id}"><div class="kcol-h"><h4>${nom}</h4><span>${l.length}</span></div>${l.map(card).join('') || vide}</div>`).join('')}</section>`;
+    }
+    const list = lst(e.id);
     return `<section class="kcol" data-col="${e.id}"><div class="kcol-h"><h3>${e.nom}</h3><span>${list.length}</span></div>
-      ${list.map(card).join('') || `<p class="faint" style="font-size:.84rem;padding:4px">Aucun candidat</p>`}</section>`;
+      ${list.map(card).join('') || vide}</section>`;
   }).join('');
 }
 function card(c) {
