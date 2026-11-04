@@ -459,7 +459,6 @@ const nextEtape = id => { if (id === 'e1' || id === 'e1c') return 'e2'; const i 
 const ECH = { envoye: { nom: 'Mail envoyé', cls: 'info', coul: 'var(--info)' }, attente: { nom: 'En attente de réponse', cls: 'warn', coul: 'var(--warn)' }, sans: { nom: 'Pas de réponse', cls: 'bad', coul: 'var(--bad)' } };
 const ANCIENNES_ETAPES = { decouverte: 'e1', approfondi: 'e2', dossier: 'e7' };
 const ETAPE_NOM = Object.fromEntries([...ETAPES.map(e => [e.id, e.nom]), ['abandon', 'Abandon']]);
-const PROFILS = ['Directeur d\'agence', 'Directeur commercial', 'Indépendant', 'Conseiller patrimonial en banque', 'Conseiller clientèle banque', 'CGP indépendant', 'Agent d\'une autre compagnie', 'Courtier', 'Commercial terrain', 'Commercial en assurance', 'Reconversion', 'Autre'];
 const SOURCES = ['Cooptation', 'LinkedIn', 'Indeed', 'APEC', 'Réseau perso', 'Salon / forum', 'Candidature spontanée', 'Site d\'emploi', 'Autre'];
 const CHALEUR = { 1: 'Froid', 2: 'Tiède', 3: 'Chaud' };
 const TYPES_EV = { entretien: 'Entretien recrutement', visite: 'Visite d\'agence', accompagnement: 'Accompagnement client', reunion: 'Réunion', admin: 'Administratif', autre: 'Autre' };
@@ -969,7 +968,7 @@ function guideEtape(c) {
     ${c.etape === 'e7' ? '<p class="note">Décision finale de recrutement : passer le candidat en « Nommés agents » pour créer sa fiche agent.</p>' : ''}</div>`;
 }
 function openCandidat(id) {
-  const c = id ? S.candidats.find(x => x.id === id) : { id: null, prenom: '', nom: '', tel: '', email: '', ville: '', profil: PROFILS[0], source: SOURCES[0], etape: 'repere', chaleur: 2, next: { texte: '', date: addDays(today(), 2) }, notes: '', journal: [] };
+  const c = id ? S.candidats.find(x => x.id === id) : { id: null, prenom: '', nom: '', tel: '', email: '', ville: '', profil: '', source: SOURCES[0], etape: 'repere', chaleur: 2, next: { texte: '', date: addDays(today(), 2) }, notes: '', journal: [] };
   if (!c) return;
   const evs = c.id ? evLies('c', c.id) : [];
   const idx = ETAPES.findIndex(e => e.id === c.etape);
@@ -978,7 +977,7 @@ function openCandidat(id) {
   <form class="form" id="f-cand">
     ${fld('Prénom', inp('c-prenom', c.prenom, 'text', 'required autocomplete="off"'))}${fld('Nom', inp('c-nom', c.nom, 'text', 'autocomplete="off"'))}
     ${fld('Téléphone', inp('c-tel', c.tel, 'tel'))}${fld('E-mail', inp('c-email', c.email, 'email'))}
-    ${fld('Ville', inp('c-ville', c.ville))}${fld('Profil actuel', `<select id="c-profil">${opt(PROFILS, c.profil)}</select>`)}
+    ${fld('Ville', inp('c-ville', c.ville))}${fld('Profession actuelle', inp('c-profil', c.profil, 'text', 'placeholder="Ex. Directeur d\'agence bancaire"'))}
     ${fld('Origine', `<select id="c-source">${opt(SOURCES, c.source)}</select>`)}
     ${fld('Étape', `<select id="c-etape">${[...ETAPES, { id: 'abandon', nom: 'Abandon' }].map(e => `<option value="${e.id}" ${e.id === c.etape ? 'selected' : ''}>${e.nom}</option>`).join('')}</select>`)}
     <div class="field"><span>Intérêt</span><div class="seg" role="group" aria-label="Intérêt" id="c-heat">${[1, 2, 3].map(v => `<button type="button" data-a="pick-heat" data-v="${v}" aria-pressed="${c.chaleur === v}">${CHALEUR[v]}</button>`).join('')}</div></div>
