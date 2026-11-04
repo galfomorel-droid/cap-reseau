@@ -460,6 +460,8 @@ const PARALLELE = [{ id: 'rh', nom: 'Entretien RH avec le CIR régional' }, { id
 /* Étape suivante (premier entretien individuel et réunion collective mènent tous deux à l'entretien de synthèse) */
 const nextEtape = id => { if (id === 'e1' || id === 'e1c') return 'e2'; const i = ETAPES.findIndex(e => e.id === id); return i >= 0 && i < ETAPES.length - 1 ? ETAPES[i + 1].id : null; };
 const ECH = { envoye: { nom: 'Mail envoyé', cls: 'info', coul: 'var(--info)' }, attente: { nom: 'En attente de réponse', cls: 'warn', coul: 'var(--warn)' }, sans: { nom: 'Pas de réponse', cls: 'bad', coul: 'var(--bad)' } };
+/* Modèles de mails proposés au départ (modifiables dans Réglages) */
+const MODELES_DEFAUT = [{"id": "contact", "nom": "Premier contact", "relance": 5, "sujet": "Échange autour du métier d'agent général", "corps": "Bonjour {prenom},\n\nVotre parcours a retenu mon attention et je serais ravie d'échanger avec vous sur le métier d'agent général : l'indépendance d'un chef d'entreprise, avec l'appui d'un grand réseau.\n\nSeriez-vous disponible pour un premier échange dans les prochains jours ? Je m'adapte à vos disponibilités.\n\nBien cordialement,\n{signature}"}, {"id": "e1", "nom": "Invitation au premier entretien individuel", "relance": 3, "sujet": "Invitation à un premier entretien", "corps": "Bonjour {prenom},\n\nSuite à notre échange, je vous propose un premier entretien individuel le {date} à {heure}, à l'adresse suivante : {lieu}.\n\nCe rendez-vous nous permettra de faire connaissance et de vous présenter l'ensemble du processus de recrutement. Je vous remettrai également un questionnaire confidentiel.\n\nMerci de me confirmer votre présence.\n\nBien cordialement,\n{signature}"}, {"id": "e1c", "nom": "Invitation à la réunion collective", "relance": 3, "sujet": "Invitation à notre réunion de présentation", "corps": "Bonjour {prenom},\n\nJ'ai le plaisir de vous inviter à notre réunion collective de présentation du métier d'agent général, le {date} à {heure}, à l'adresse suivante : {lieu}.\n\nVous y découvrirez le métier, l'accompagnement proposé et les étapes du recrutement.\n\nMerci de me confirmer votre présence.\n\nBien cordialement,\n{signature}"}, {"id": "quest", "nom": "Envoi du questionnaire confidentiel", "relance": 5, "sujet": "Votre questionnaire confidentiel", "corps": "Bonjour {prenom},\n\nComme convenu, vous trouverez ci-joint le questionnaire confidentiel. Merci de me le retourner complété avant notre prochain rendez-vous.\n\nJe reste disponible pour toute question.\n\nBien cordialement,\n{signature}"}, {"id": "merci", "nom": "Remerciements après entretien", "relance": 0, "sujet": "Merci pour notre échange", "corps": "Bonjour {prenom},\n\nMerci pour le temps que vous m'avez consacré lors de notre entretien. Comme évoqué, je reviens vers vous très prochainement pour la suite du processus.\n\nBien cordialement,\n{signature}"}, {"id": "relance", "nom": "Relance sans réponse", "relance": 7, "sujet": "Suite à mon précédent message", "corps": "Bonjour {prenom},\n\nJe me permets de revenir vers vous suite à mon précédent message. Êtes-vous toujours intéressé(e) par le métier d'agent général ?\n\nJe serais ravie d'en discuter avec vous, à votre convenance.\n\nBien cordialement,\n{signature}"}];
 const ANCIENNES_ETAPES = { decouverte: 'e1', approfondi: 'e2', dossier: 'e7' };
 const ETAPE_NOM = Object.fromEntries([...ETAPES.map(e => [e.id, e.nom]), ['abandon', 'Abandon']]);
 const SOURCES = ['Cooptation', 'LinkedIn', 'Indeed', 'APEC', 'Réseau perso', 'Salon / forum', 'Candidature spontanée', 'Site d\'emploi', 'Autre'];
@@ -474,8 +476,9 @@ const METRIQUES = {
 const DDA_HEURES = 15;
 
 /* ---------- État ---------- */
-function blank() { return { v: 3, updatedAt: 0, settings: { prenom: '', secteur: '', objNomination: 3 }, candidats: [], agents: [], taches: [], events: [] }; }
+function blank() { return { v: 3, updatedAt: 0, settings: { prenom: '', secteur: '', objNomination: 3, signature: '', modeles: MODELES_DEFAUT.map(m => ({ ...m })) }, candidats: [], agents: [], taches: [], events: [] }; }
 function normalize(s) { const b = blank(); for (const k of Object.keys(b)) if (s[k] == null) s[k] = b[k]; delete s.gcal; delete s.demo; delete s.cals;
+  if (!Array.isArray(s.settings.modeles)) s.settings.modeles = MODELES_DEFAUT.map(m => ({ ...m }));
   for (const c of s.candidats) { if (ANCIENNES_ETAPES[c.etape]) c.etape = ANCIENNES_ETAPES[c.etape]; delete c.projet; c.parallele = c.parallele || {}; }
   return s; }
 function load() { try { const r = ls.get(KEY); return r ? normalize(JSON.parse(r)) : null; } catch (e) { return null; } }
@@ -561,6 +564,38 @@ function renderSync() {
   else if (G.pushing) { cls = 'busy'; txt = 'Enregistrement…'; }
   else if (isDirty()) { cls = 'warn'; txt = 'Modifications à enregistrer'; }
   for (const el of $$('.sync')) { el.className = 'sync ' + cls; el.querySelector('span:last-child').textContent = txt; el.title = txt; }
+}
+
+/* ---------- Modèles de mails ---------- */
+function remplir(t, c) {
+  const ev = evLies('c', c.id).find(e => e.date >= today());
+  const v = { prenom: c.prenom || '', nom: c.nom || '', date: ev ? fmtLong(ev.date) : '[date]', heure: ev?.debut ? ev.debut.replace(':', 'h') : '[heure]', lieu: ev?.lieu || '[lieu]', signature: S.settings.signature || S.settings.prenom || '' };
+  return String(t || '').replace(/\{(\w+)\}/g, (m, k) => k in v ? v[k] : m);
+}
+function openMail(cid, mid) {
+  const c = S.candidats.find(x => x.id === cid), m = S.settings.modeles.find(x => x.id === mid); if (!c || !m) return;
+  const body = `<form class="form" id="f-mail">
+    ${fld('À', inp('m-to', c.email, 'email', 'placeholder="Adresse e-mail du candidat"'), true)}
+    ${fld('Objet', inp('m-sujet', remplir(m.sujet, c)), true)}
+    ${fld('Message', `<textarea id="m-corps" rows="12">${esc(remplir(m.corps, c))}</textarea>`, true)}
+  </form>
+  ${/\[(date|heure|lieu)\]/.test(remplir(m.corps, c)) ? '<p class="note">Aucun rendez-vous à venir n\'est lié à ce candidat : compléter [date], [heure] et [lieu] dans le message, ou planifier le rendez-vous d\'abord.</p>' : ''}
+  <p class="faint" style="font-size:.84rem">Le mail s'ouvre dans votre messagerie, prêt à envoyer. Le statut passe sur « Mail envoyé »${+m.relance ? ` et une relance est prévue dans ${+m.relance} jours` : ''}.</p>`;
+  const foot = `<button class="btn" data-a="open-c" data-id="${c.id}">Retour</button><span class="sp"></span><button class="btn" data-a="mail-copy">Copier le texte</button><button class="btn primary" data-a="mail-send" data-id="${c.id}" data-m="${m.id}">Ouvrir dans ma messagerie</button>`;
+  openDrawer(m.nom, body, foot, { type: 'mail', id: c.id });
+}
+function openModele(mid) {
+  const m = mid ? S.settings.modeles.find(x => x.id === mid) : { id: null, nom: '', sujet: '', corps: 'Bonjour {prenom},\n\n\n\nBien cordialement,\n{signature}', relance: 5 };
+  if (!m) return;
+  const body = `<form class="form" id="f-mod">
+    ${fld('Nom du modèle', inp('o-nom', m.nom, 'text', 'required'), true)}
+    ${fld('Objet du mail', inp('o-sujet', m.sujet), true)}
+    ${fld('Message', `<textarea id="o-corps" rows="12">${esc(m.corps)}</textarea>`, true)}
+    ${fld('Relance prévue après (jours, 0 = aucune)', inp('o-rel', m.relance, 'number', 'min="0" max="60"'))}
+  </form>
+  <p class="note">Mots remplacés automatiquement : {prenom} et {nom} du candidat, {date}, {heure} et {lieu} de son prochain rendez-vous, {signature}.</p>`;
+  const foot = `${m.id ? `<button class="btn danger" data-a="arm" data-then="del-mod" data-id="${m.id}">Supprimer</button>` : ''}<span class="sp"></span><button class="btn primary" data-a="save-mod" data-id="${m.id || ''}">Enregistrer</button>`;
+  openDrawer(m.id ? 'Modèle de mail' : 'Nouveau modèle', body, foot, { type: 'mod' });
 }
 
 /* ---------- CV (stockage de fichiers privé Supabase, un dossier par compte) ---------- */
@@ -941,10 +976,14 @@ function vueReglages() {
         <label class="field"><span>Prénom</span><input id="p-prenom" name="prenom" value="${esc(st.prenom)}" placeholder="Pour l'accueil"></label>
         <label class="field"><span>Secteur</span><input id="p-secteur" name="secteur" value="${esc(st.secteur)}" placeholder="Ex. Bretagne Sud"></label>
         <label class="field"><span>Objectif de nominations sur l'année</span><input id="p-obj" name="objNomination" type="number" min="0" value="${esc(st.objNomination)}"></label>
+        <label class="field full"><span>Signature des mails</span><textarea id="p-sig" rows="3" placeholder="Prénom Nom&#10;Inspectrice commerciale&#10;06 00 00 00 00">${esc(st.signature || '')}</textarea></label>
         <div class="field" style="justify-content:flex-end"><button class="btn primary" type="submit">Enregistrer</button></div>
       </form></section>
     <section class="panel"><div class="panel-h"><h2>Compte</h2></div><div class="box" style="border:0;padding:0">${compte}</div></section>
   </div><div class="col">
+    <section class="panel"><div class="panel-h"><h2>Modèles de mails</h2><button class="btn sm" data-a="new-mod">${ic('plus')}Modèle</button></div>
+      <div class="list">${S.settings.modeles.map(m => `<div class="row link" data-a="edit-mod" data-id="${m.id}"><div class="grow"><div class="t">${esc(m.nom)}</div><div class="s">${esc(m.sujet)}${+m.relance ? ` · relance après ${+m.relance} j` : ''}</div></div><span class="chip">Modifier</span></div>`).join('') || '<p class="faint">Aucun modèle.</p>'}</div>
+      <div style="margin-top:10px"><button class="btn sm ghost" data-a="arm" data-then="reset-mod">Rétablir les modèles proposés</button></div></section>
     <section class="panel"><div class="panel-h"><h2>Sauvegarde de secours</h2></div>
       <p class="muted" style="font-size:.92rem;margin-bottom:12px">En plus de l'enregistrement en ligne, il est possible de copier toutes les données et de les coller dans une note ou un e-mail.</p>
       <div class="head-actions"><button class="btn" data-a="backup">Copier la sauvegarde</button><button class="btn" data-a="restore">Restaurer…</button></div>
@@ -1000,12 +1039,14 @@ function openCandidat(id) {
   ${c.id ? `${guideEtape(c)}
   <div class="box"><div class="section-t"><h3>Rendez-vous</h3><button class="btn sm" data-a="new-ev" data-lien="c:${c.id}">${ic('plus')}Planifier un entretien</button></div>
     ${evs.length ? `<div class="list">${evs.map(e => `<div class="row link" data-a="open-ev" data-id="${e.id}" data-cal="${esc(e.calId)}"><span class="time">${fmtD(e.date, { day: 'numeric', month: 'short' })}</span><div class="grow"><div class="t">${esc(e.titre)}</div><div class="s">${e.debut || ''}${e.lieu ? ' · ' + esc(e.lieu) : ''}</div></div>${e.date < today() ? '<span class="chip">passé</span>' : '<span class="chip accent">à venir</span>'}</div>`).join('')}</div>` : '<p class="faint" style="font-size:.9rem">Aucun rendez-vous planifié.</p>'}</div>
+  <div class="box"><div class="section-t"><h3>Envoyer un mail</h3>${ECH[c.ech] ? `<span class="chip ${ECH[c.ech].cls}">${ECH[c.ech].nom}</span>` : ''}</div>
+    <div class="head-actions">${S.settings.modeles.map(m => `<button class="btn sm" data-a="mail" data-id="${c.id}" data-m="${m.id}">${esc(m.nom)}</button>`).join('') || '<span class="faint">Aucun modèle : en créer dans Réglages.</span>'}</div></div>
   <div class="box"><div class="section-t"><h3>CV</h3>${c.cv ? '' : `<button class="btn sm" data-a="cv-add" data-id="${c.id}">${ic('plus')}Ajouter le CV</button>`}</div>
     ${c.cv ? `<div class="row" style="padding:0;flex-wrap:wrap"><div class="grow"><div class="t" style="overflow-wrap:anywhere">${esc(c.cv.nom)}</div><div class="s">Ajouté le ${fmtD(c.cv.date, { day: 'numeric', month: 'long', year: 'numeric' })} · ${Math.max(1, Math.round(c.cv.taille / 1024))} Ko</div></div>
       <button class="btn sm primary" data-a="cv-open" data-id="${c.id}">Voir</button><button class="btn sm" data-a="cv-add" data-id="${c.id}">Remplacer</button><button class="btn sm danger" data-a="arm" data-then="cv-del" data-id="${c.id}">Retirer</button></div>` : '<p class="faint" style="font-size:.9rem">PDF, Word ou photo, 10 Mo maximum.</p>'}</div>
   <div class="box"><h3>Historique des échanges</h3>
     <div class="inline"><input id="c-jtxt" placeholder="Ajouter un compte rendu d'échange…"><button class="btn" data-a="add-j" data-id="${c.id}">Ajouter</button></div>
-    <div class="journal">${(c.journal || []).map(j => `<div class="jline"><time>${fmtD(j.date, { day: 'numeric', month: 'short', year: '2-digit' })}</time><div>${ECH[j.ech] ? `<span class="chip ${ECH[j.ech].cls}">${ECH[j.ech].nom}</span>` : esc(j.texte)}</div></div>`).join('') || '<p class="faint" style="font-size:.9rem">Rien pour l\'instant.</p>'}</div></div>` : ''}`;
+    <div class="journal">${(c.journal || []).map(j => `<div class="jline"><time>${fmtD(j.date, { day: 'numeric', month: 'short', year: '2-digit' })}</time><div>${ECH[j.ech] ? `<span class="chip ${ECH[j.ech].cls}">${ECH[j.ech].nom}</span> ` : ''}${ECH[j.ech] && /^Échange :/.test(j.texte) ? '' : esc(j.texte)}</div></div>`).join('') || '<p class="faint" style="font-size:.9rem">Rien pour l\'instant.</p>'}</div></div>` : ''}`;
   const foot = `${c.id ? `<button class="btn danger" data-a="arm" data-then="del-c" data-id="${c.id}">Supprimer</button>` : ''}<span class="sp"></span>
     ${c.id && idx >= 0 && nextEtape(c.etape) ? `<button class="btn" data-a="next-stage" data-id="${c.id}">Passer à « ${ETAPE_NOM[nextEtape(c.etape)]} »</button>` : ''}
     <button class="btn primary" data-a="save-c" data-id="${c.id || ''}">Enregistrer</button>`;
@@ -1134,6 +1175,26 @@ const A = {
   'toggle-ab': () => { UI.showAb = !UI.showAb; render(); },
   metric: el => { UI.metric = el.dataset.v; render(); },
   week: el => { const n = +el.dataset.v; UI.weekStart = n === 0 ? weekStart(today()) : addDays(UI.weekStart, n); render(); },
+  mail: el => openMail(el.dataset.id, el.dataset.m),
+  'mail-copy': async () => { const t = `Objet : ${$('#m-sujet').value}\n\n${$('#m-corps').value}`;
+    try { await navigator.clipboard.writeText(t); toast('Texte copié'); } catch (e) { $('#m-corps').select(); toast('Texte sélectionné : copier avec Ctrl+C'); } },
+  'mail-send': el => {
+    const c = S.candidats.find(x => x.id === el.dataset.id), m = S.settings.modeles.find(x => x.id === el.dataset.m); if (!c || !m) return;
+    const to = $('#m-to').value.trim(); if (!to) { $('#m-to').focus(); toast('Ajouter l\'adresse e-mail du candidat'); return; }
+    const a = document.createElement('a'); a.href = `mailto:${encodeURIComponent(to).replace(/%40/g, '@')}?subject=${encodeURIComponent($('#m-sujet').value)}&body=${encodeURIComponent($('#m-corps').value)}`; document.body.appendChild(a); a.click(); a.remove();
+    if (!c.email) c.email = to;
+    c.journal = c.journal || []; c.journal.unshift({ date: today(), texte: '« ' + m.nom + ' »', ech: 'envoye' }); c.ech = 'envoye';
+    if (+m.relance) c.next = { texte: `Relancer ${c.prenom || ''} (${m.nom.toLowerCase()})`.replace('  ', ' '), date: addDays(today(), +m.relance) };
+    save(); openCandidat(c.id); render(); toast(+m.relance ? `Mail prêt · relance prévue ${relDay(addDays(today(), +m.relance))}` : 'Mail prêt dans votre messagerie');
+  },
+  'new-mod': () => openModele(null),
+  'edit-mod': el => openModele(el.dataset.id),
+  'save-mod': el => {
+    const nom = $('#o-nom').value.trim(); if (!nom) { $('#o-nom').focus(); toast('Le nom est nécessaire'); return; }
+    let m = el.dataset.id ? S.settings.modeles.find(x => x.id === el.dataset.id) : null; const isNew = !m; if (isNew) { m = { id: uid() }; S.settings.modeles.push(m); }
+    Object.assign(m, { nom, sujet: $('#o-sujet').value.trim(), corps: $('#o-corps').value, relance: Math.max(0, +$('#o-rel').value || 0) });
+    save(); closeDrawer(); render(); toast(isNew ? 'Modèle ajouté' : 'Modèle enregistré');
+  },
   'pick-ech': el => { drawerCtx.ech = el.dataset.v; $$('#c-ech button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === el.dataset.v)); },
   'pick-heat': el => { drawerCtx.heat = +el.dataset.v; $$('#c-heat button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === el.dataset.v)); },
   signin: () => { G.lastEmail = SES?.email || G.lastEmail; G.authMsg = ''; showGate('login'); },
@@ -1203,6 +1264,8 @@ const A = {
     const id = el.dataset.id;
     ({
       wipe: () => { S = blank(); save(); render(); toast('Toutes les données ont été effacées'); },
+      'del-mod': () => { S.settings.modeles = S.settings.modeles.filter(m => m.id !== id); save(); closeDrawer(); render(); toast('Modèle supprimé'); },
+      'reset-mod': () => { S.settings.modeles = MODELES_DEFAUT.map(m => ({ ...m })); save(); render(); toast('Modèles rétablis'); },
       'cv-del': () => { const c = S.candidats.find(x => x.id === id); if (!c?.cv) return; cvDelete(c.cv.path); delete c.cv; save(); openCandidat(c.id); render(); toast('CV retiré'); },
       'del-c': () => { const cc = S.candidats.find(c => c.id === id); if (cc?.cv) cvDelete(cc.cv.path); S.candidats = S.candidats.filter(c => c.id !== id); save(); closeDrawer(); render(); toast('Candidat supprimé'); },
       'del-a': () => { S.agents = S.agents.filter(a => a.id !== id); S.candidats.forEach(c => { if (c.agentId === id) delete c.agentId; }); save(); closeDrawer(); render(); toast('Agent supprimé'); },
@@ -1223,7 +1286,9 @@ document.addEventListener('submit', e => {
   e.preventDefault();
   if (e.target.id === 'f-auth') { authSubmit(); return; }
   if (e.target.id === 'f-pwd') { $('[data-a="save-pwd"]')?.click(); return; }
-  if (e.target.id === 'f-profil') { S.settings.prenom = $('#p-prenom').value.trim(); S.settings.secteur = $('#p-secteur').value.trim(); S.settings.objNomination = +$('#p-obj').value || 0; save(); render(); toast('Profil enregistré'); }
+  if (e.target.id === 'f-mod') { $('[data-a="save-mod"]')?.click(); return; }
+  if (e.target.id === 'f-mail') { $('[data-a="mail-send"]')?.click(); return; }
+  if (e.target.id === 'f-profil') { S.settings.signature = $('#p-sig').value.trim(); S.settings.prenom = $('#p-prenom').value.trim(); S.settings.secteur = $('#p-secteur').value.trim(); S.settings.objNomination = +$('#p-obj').value || 0; save(); render(); toast('Profil enregistré'); }
   else if (e.target.id === 'f-cand') $('[data-a="save-c"]')?.click();
   else if (e.target.id === 'f-agent') $('[data-a="save-a"]')?.click();
   else if (e.target.id === 'f-ev') $('[data-a="save-ev"]')?.click();
